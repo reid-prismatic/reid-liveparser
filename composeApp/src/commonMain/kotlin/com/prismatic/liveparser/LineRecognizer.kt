@@ -1,21 +1,21 @@
 package com.prismatic.liveparser
 
-enum class LineType {
+enum class LineType(override val isBlockStart: Boolean = false) : LiveParseLineContext {
     None,
     Blank,
-    ConcreteEntityStart,
+    ConcreteEntityStart(true),
     ConcreteEntityBody,
     Property,
-    DefinitionEntityStart,
+    DefinitionEntityStart(true),
     DefinitionEntityBody,
-    CodeStart,
+    CodeStart(true),
     CodeContinue,
     CodeEnd,
-    ScriptStart,
+    ScriptStart(true),
     ScriptContinue,
     ScriptEnd,
     SyntaxError,
-    SegmentBreak,
+    SegmentBreak(true),
 }
 
 fun getLineType( line: String, prevLineType: LineType = LineType.None): LineType {

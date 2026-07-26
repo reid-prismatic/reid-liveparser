@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ScribeDocTest() {
     val textFieldState = remember { TextFieldState() }
-    val liveParse = textFieldState.rememberLiveParse( LineType.None) { line, context ->
+    val liveParse = textFieldState.rememberLiveParse( LineType.None, Unit) { line, context ->
         getLineType(line, context)
     }
 //    val scribeDocState = remember { ScribeDocumentState(scope) }
