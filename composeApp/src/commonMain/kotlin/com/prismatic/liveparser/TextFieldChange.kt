@@ -1,37 +1,34 @@
 package com.prismatic.liveparser
 
 import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.text.TextRange
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.chunked
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.runningFold
-import kotlin.math.max
-import kotlin.math.min
+
+/**
+ * Observes the state of a text field and provides a flow describing changes to the text in the text field.
+ */
+public fun TextFieldState.changedLinesInfoFlow(): Flow<ChangedLinesInfo> =
+    snapshotFlow { text }
+        .withPrevious()
+        .map { (prevText, text) ->
+            computeChangedLines(prevText ?: "", text ?: "")
+        }
 
 
-interface ChangedLinesRange {
+public interface ChangedLinesRange {
     val startLine: Int
     val prevLineCount: Int
     val newLineCount: Int
 }
 
-interface ChangedLinesInfo : ChangedLinesRange {
+public interface ChangedLinesInfo : ChangedLinesRange {
     val prevLines: List<String>
     val newLines: List<String>
 }
 
-data class ChangedLinesInfoImpl(
+private data class ChangedLinesInfoImpl(
     override val startLine: Int,
     override val prevLineCount: Int,
     override val newLineCount: Int,
@@ -41,7 +38,7 @@ data class ChangedLinesInfoImpl(
     override fun toString(): String = "Lines ${startLine}($prevLineCount->$newLineCount):  [${prevLines.joinToString(","){"'$it'"}}] -> [${newLines.joinToString(","){"'$it'"}}]"
 }
 
-fun CharSequence.indexOfNth(n: Int, predicate: (Char) -> Boolean) : Int {
+private fun CharSequence.indexOfNth(n: Int, predicate: (Char) -> Boolean) : Int {
     if( n==0 ) return -1
     var found = 0
     for( i in indices ) {
@@ -53,7 +50,7 @@ fun CharSequence.indexOfNth(n: Int, predicate: (Char) -> Boolean) : Int {
     return -1
 }
 
-fun computeChangedLines(a: CharSequence, b: CharSequence) : ChangedLinesInfo {
+private fun computeChangedLines(a: CharSequence, b: CharSequence) : ChangedLinesInfo {
     val unchangedStartLength = b.commonPrefixLengthWith(a)
     val unchangedEndLength = b.commonSuffixLengthWith(a, maxLength = a.length - unchangedStartLength)
     val lineBreaksBefore = b.countInSubsequence(0, unchangedStartLength) { it == '\n' }
@@ -68,18 +65,6 @@ fun computeChangedLines(a: CharSequence, b: CharSequence) : ChangedLinesInfo {
     val bLines = b.lineSequence().count()
     val lineDelta = newContent.size - prevContent.size
     check(aLines + lineDelta == bLines)
-//    if( aLines + lineDelta != bLines) {
-//        println()
-//        println()
-//        println(">>>>>>>")
-//        println("WARNING!!!! $aLines + $lineDelta != $bLines")
-//        println("unchangedStartLength=$unchangedStartLength lineBreaksBefore=$lineBreaksBefore unchangedEndLength=$unchangedEndLength")
-//        println("========================================")
-//        println(a)
-//        println("----------------------------------------")
-//        println(b)
-//        println("========================================")
-//    }
     return ChangedLinesInfoImpl(
         startLine = lineBreaksBefore,
         prevLineCount = prevContent.size,
@@ -89,12 +74,5 @@ fun computeChangedLines(a: CharSequence, b: CharSequence) : ChangedLinesInfo {
     )
 }
 
-fun TextFieldState.changedLinesInfoFlow() =
-    snapshotFlow { text }
-        .withPrevious()
-        .mapNotNull { (prevText, text) ->
-            computeChangedLines(prevText ?: "", text ?: "")
-        }
-
-fun <T> Flow<T>.withPrevious() = runningFold<T,Pair<T?,T?>>(null to null) {acc, v -> acc.second to v}
+private fun <T> Flow<T>.withPrevious() = runningFold<T,Pair<T?,T?>>(null to null) {acc, v -> acc.second to v}
 

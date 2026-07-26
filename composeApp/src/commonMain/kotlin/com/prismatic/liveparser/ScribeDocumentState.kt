@@ -54,41 +54,8 @@ sealed class ScriptLineContext {
 fun Char.isPropertyNameStartChar() = isLetter() || this == '_'
 fun Char.isPropertyNameChar() = isLetterOrDigit() || this == '_' || this == '-'
 
-private data class DecomposedLine(
-    val lineText: String,
-    val commentIndex: Int,
-    val comment: String,
-    val rawComment: String,
-    val body: String,
-    val rawBody: String,
-    val trimmedBody: String = body.trimStart(),
-    val firstChar: Char = if(trimmedBody.isNotEmpty()) trimmedBody[0] else 0.toChar(),
-    val secondChar: Char = trimmedBody.drop(1).firstOrNull { it.isWhitespace() } ?: 0.toChar()
-)
-
 fun Char.isTextBlockStartChar() = isLetterOrDigit() || this == '_' || this == '.' || this == '"'
 fun Char.isVoiceoverBlockStart() = this == '>'
-
-private fun String.decomposeLine() : DecomposedLine {
-    val lineText = this
-    val commentIndex = lineText.indexOf("//")
-    val comment: String
-    val rawComment: String
-    val body: String
-    val rawBody: String
-    if( commentIndex >= 0 ) {
-        rawBody = lineText.substring(commentIndex)
-        comment = lineText.substring(commentIndex+2).trim()
-        rawComment = rawBody.takeLastWhile { it.isWhitespace() } + lineText.substring(commentIndex)
-        body = rawBody.dropLastWhile { it.isWhitespace() }
-    } else {
-        rawBody = lineText
-        comment = ""
-        rawComment = lineText.takeLastWhile { it.isWhitespace() }
-        body = lineText.dropLastWhile { it.isWhitespace() }
-    }
-    return DecomposedLine(lineText, commentIndex, comment, rawComment, body, rawBody)
-}
 
 private fun DecomposedLine.toScriptLine(
     form: ScriptLineForm,
@@ -135,19 +102,19 @@ private fun DecomposedLine.parseAsShorthandTextEntityStart() =
         toScriptLine(ScriptLineForm.ShorthandEntityStart, ScriptLineContext.EntityBody)
     else null
 
-private fun DecomposedLine.parseAsShorthandVoiceoverEntityStart() =
-    if(firstChar.isVoiceoverBlockStart() && secondChar.isLetterOrDigit())
-        toScriptLine(ScriptLineForm.ShorthandEntityStart, ScriptLineContext.EntityBody)
-    else null
+//private fun DecomposedLine.parseAsShorthandVoiceoverEntityStart() =
+//    if(firstChar.isVoiceoverBlockStart() && secondChar.isLetterOrDigit())
+//        toScriptLine(ScriptLineForm.ShorthandEntityStart, ScriptLineContext.EntityBody)
+//    else null
 
 private fun DecomposedLine.parseAsDelayEntityStart() =
     if(firstChar == '+')
         toScriptLine(ScriptLineForm.DelayEntityStart, ScriptLineContext.EntityBody)
     else null
 
-private fun DecomposedLine.parseAsShorthandEntityStart() =
-    parseAsShorthandTextEntityStart()
-        ?: parseAsShorthandVoiceoverEntityStart()
+//private fun DecomposedLine.parseAsShorthandEntityStart() =
+//    parseAsShorthandTextEntityStart()
+//        ?: parseAsShorthandVoiceoverEntityStart()
 
 private fun DecomposedLine.parseAsEntityStart() =
     parseAsConcreteEntityStart()
@@ -155,7 +122,7 @@ private fun DecomposedLine.parseAsEntityStart() =
         ?: parseAsCodeBlockStart()
         ?: parseAsSingleLineScriptBlock()
         ?: parseAsScriptStart()
-        ?: parseAsShorthandEntityStart()
+//        ?: parseAsShorthandEntityStart()
         ?: parseAsDelayEntityStart()
 
 private fun DecomposedLine.isDefinitionEntityStart() = body.startsWith('{') && body.endsWith('}') && !body.contains('=')
