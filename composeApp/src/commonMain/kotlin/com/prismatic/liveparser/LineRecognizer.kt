@@ -14,12 +14,14 @@ enum class LineType {
     ScriptStart,
     ScriptContinue,
     ScriptEnd,
-    SyntaxError
+    SyntaxError,
+    SegmentBreak,
 }
 
 fun getLineType( line: String, prevLineType: LineType = LineType.None): LineType {
     return when(prevLineType) {
-        LineType.None -> when(val type = line.decomposeLine().contextFreeType) {
+        LineType.None, LineType.SegmentBreak -> when(val type = line.decomposeLine().contextFreeType) {
+                LineType.Blank -> LineType.None
                 LineType.Property -> LineType.SyntaxError
                 else -> type
             }
@@ -91,6 +93,7 @@ val DecomposedLine.isPropertyLine: Boolean get() = firstChar == '-' && body.star
 val DecomposedLine.isBlankLine: Boolean get() = trimmedBody.isEmpty()
 val DecomposedLine.isTextEntityStart: Boolean get() = firstChar.isLetterOrDigit() || firstChar in "._\""
 val DecomposedLine.isVoiceoverEntityStart: Boolean get() = firstChar == '>' && trimmedBody.drop(1).firstOrNull { !it.isWhitespace() }?.isLetterOrDigit() ?: false
+val DecomposedLine.isSegmentBreak: Boolean get() = firstChar == '-' && trimmedBody.startsWith("----")
 
 val DecomposedLine.contextFreeType get() = when {
     isBlankLine -> LineType.Blank
@@ -103,6 +106,7 @@ val DecomposedLine.contextFreeType get() = when {
     isPropertyLine -> LineType.Property
     isTextEntityStart -> LineType.ConcreteEntityStart
     isVoiceoverEntityStart -> LineType.ConcreteEntityStart
+    isSegmentBreak -> LineType.SegmentBreak
     else -> LineType.SyntaxError
 }
 
