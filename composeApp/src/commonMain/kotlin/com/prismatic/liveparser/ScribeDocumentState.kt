@@ -212,71 +212,71 @@ fun ScriptLine(lineText: String, previous: ScriptLine) : ScriptLine {
     return lineText.decomposeLine().toScriptLine(ScriptLineForm.Error, previous.context)
 }
 
-class ScribeDocumentState(coroutineScope: CoroutineScope) {
-
-    val textFieldState: TextFieldState = TextFieldState()
-
-    private val _lines = mutableStateListOf<ScriptLine>(ScriptLine.None)
-    val lines: List<ScriptLine> get() = _lines
-
-    private val _entities = mutableStateListOf<ScribeEntity>()
-    val entities: List<ScribeEntity> get() = _entities
-
-    val changeList = mutableStateListOf<ChangedLinesInfo>()
-    val lineChangesFlow = textFieldState.changedLinesInfoFlow()
-
-    init {
-        coroutineScope.launch {
-            lineChangesFlow.collect { change ->
-                changeList += change
-//                println("change: @${change.startLine} (${change.prevLineCount} -> ${change.newLineCount}) size=${_lines.size}")
-
-                // TODO: Process the lines one at a time.
-                //       For each new line, parse in context of the previous line.
-                //       When a line overwrites another line, check if the block start/end flags mismatch for it,
-                //       and if they do, invalidate subsequent lines until they match again
-
-                var prevLine = if(change.startLine <= 0) ScriptLine.None else _lines[change.startLine-1]
-                change.newLines.forEachIndexed { i, line ->
-                    val newLine = ScriptLine(line,prevLine)
-                    prevLine = newLine
-                    if( i < change.prevLineCount )
-                        _lines[change.startLine+i] = newLine
-                    else
-                        _lines.add(change.startLine+i, newLine)
-                }
-                if( change.newLineCount < change.prevLineCount ) {
-                    _lines.removeRange(change.startLine+change.newLineCount, change.startLine+change.prevLineCount)
-                }
-//                val lastChangedLine = change.startLine + change.newLineCount - 1
-//                val expectedContext = if( lastChangedLine >= 0 ) _lines[lastChangedLine].context else ScriptLineContext.None
-//                _lines[change.startLine + change.newLineCount - 1]
-
-                // TODO: Check context for changed lines
-
-//                if( change.prevLineCount == change.newLineCount ) {
-//                    for( i in 0 ..< change.newLineCount ) {
-//                        _lines[change.startLine+i] = ScriptLine(change.newLines[i])
-//                    }
-//                } else if( change.prevLineCount == 0 ) {
-//                     _lines.addAll(change.startLine, change.newLines.map { ScriptLine(it) })
-//                } else {
-//                    _lines.removeRange(change.startLine, change.startLine + change.prevLineCount)
-//                    _lines.addAll(change.startLine, change.newLines.map { ScriptLine(it) })
+//class ScribeDocumentState(coroutineScope: CoroutineScope) {
+//
+//    val textFieldState: TextFieldState = TextFieldState()
+//
+//    private val _lines = mutableStateListOf<ScriptLine>(ScriptLine.None)
+//    val lines: List<ScriptLine> get() = _lines
+//
+//    private val _entities = mutableStateListOf<ScribeEntity>()
+//    val entities: List<ScribeEntity> get() = _entities
+//
+//    val changeList = mutableStateListOf<ChangedLinesInfo>()
+//    val lineChangesFlow = textFieldState.changedLinesInfoFlow()
+//
+//    init {
+//        coroutineScope.launch {
+//            lineChangesFlow.collect { change ->
+//                changeList += change
+////                println("change: @${change.startLine} (${change.prevLineCount} -> ${change.newLineCount}) size=${_lines.size}")
+//
+//                // TODO: Process the lines one at a time.
+//                //       For each new line, parse in context of the previous line.
+//                //       When a line overwrites another line, check if the block start/end flags mismatch for it,
+//                //       and if they do, invalidate subsequent lines until they match again
+//
+//                var prevLine = if(change.startLine <= 0) ScriptLine.None else _lines[change.startLine-1]
+//                change.newLines.forEachIndexed { i, line ->
+//                    val newLine = ScriptLine(line,prevLine)
+//                    prevLine = newLine
+//                    if( i < change.prevLineCount )
+//                        _lines[change.startLine+i] = newLine
+//                    else
+//                        _lines.add(change.startLine+i, newLine)
 //                }
-            }
-        }
-    }
-}
-
-class ScribeEntity {
-
-}
-
-class EntityProperties {
-
-}
-
-enum class EntityPropertyType {
-
-}
+//                if( change.newLineCount < change.prevLineCount ) {
+//                    _lines.removeRange(change.startLine+change.newLineCount, change.startLine+change.prevLineCount)
+//                }
+////                val lastChangedLine = change.startLine + change.newLineCount - 1
+////                val expectedContext = if( lastChangedLine >= 0 ) _lines[lastChangedLine].context else ScriptLineContext.None
+////                _lines[change.startLine + change.newLineCount - 1]
+//
+//                // TODO: Check context for changed lines
+//
+////                if( change.prevLineCount == change.newLineCount ) {
+////                    for( i in 0 ..< change.newLineCount ) {
+////                        _lines[change.startLine+i] = ScriptLine(change.newLines[i])
+////                    }
+////                } else if( change.prevLineCount == 0 ) {
+////                     _lines.addAll(change.startLine, change.newLines.map { ScriptLine(it) })
+////                } else {
+////                    _lines.removeRange(change.startLine, change.startLine + change.prevLineCount)
+////                    _lines.addAll(change.startLine, change.newLines.map { ScriptLine(it) })
+////                }
+//            }
+//        }
+//    }
+//}
+//
+//class ScribeEntity {
+//
+//}
+//
+//class EntityProperties {
+//
+//}
+//
+//enum class EntityPropertyType {
+//
+//}

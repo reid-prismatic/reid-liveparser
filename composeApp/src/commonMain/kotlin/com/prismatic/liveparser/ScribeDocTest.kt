@@ -41,14 +41,28 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private data class ScribeEntity(
+    val type: LineType,
+)
+
 @Composable
 fun ScribeDocTest() {
     val textFieldState = remember { TextFieldState() }
+    val selectedLine by derivedStateOf(structuralEqualityPolicy()) {
+        textFieldState.text.countInSubsequence(0,textFieldState.selection.start) {it=='\n'}
+    }
     val textFieldScrollState = rememberScrollState()
     val listState = rememberLazyListState()
-    val liveParse = textFieldState.rememberLiveParse( LineType.None, Unit) { line, context ->
-        getLineType(line, context)
-    }
+    val liveParse = textFieldState.rememberLiveParse(
+        initialContext = LineType.None,
+        nullEntity = ScribeEntity(LineType.None),
+        computeContext = { line, context ->
+            getLineType(line, context)
+        },
+        parseEntity = {
+            ScribeEntity(context)
+        }
+    )
 //    val scribeDocState = remember { ScribeDocumentState(scope) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -66,7 +80,7 @@ fun ScribeDocTest() {
     }
 
     Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        Box(Modifier.weight(3f).fillMaxHeight()) {
             LazyColumn(Modifier.fillMaxSize().offset { IntOffset(0, -scrollDiff) }, state = listState) {
                 items(liveParse.lines, {it.entityId}) { line ->
                     LineDetail(line)
@@ -85,11 +99,12 @@ fun ScribeDocTest() {
                 }
             )
         }
-//        Column(Modifier.weight(1f).fillMaxHeight()) {
-//            scribeDocState.changeList.takeLast(20).forEach {
-//                Text(it.toString())
-//            }
-//        }
+        LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
+            items(liveParse.entities, {it.id}) { entity ->
+                val selected = selectedLine in entity.startLine ..entity.endLine
+                Text("${entity.id}: ${entity.entity.type}", Modifier.background(if (selected) Color.Yellow else Color.White))
+            }
+        }
     }
 }
 
