@@ -32,6 +32,7 @@ public interface LiveParse<CONTEXT:LiveParseLineContext> {
 public interface LiveParseLine<CONTEXT:LiveParseLineContext> {
     val line: String
     val context: CONTEXT
+    val entityId: EntityId
 }
 
 public interface LiveParseEntity<ENTITY:Any> {
@@ -60,7 +61,7 @@ private data class LiveParseLineImpl<CONTEXT:LiveParseLineContext>(
     override val line: String,
     override val context: CONTEXT,
     val prevContext: CONTEXT,
-    val entityId: EntityId
+    override val entityId: EntityId
 ) : LiveParseLine<CONTEXT>
 
 private inline infix fun <T:Comparable<T>> ClosedRange<T>.intersects(other: ClosedRange<T>) : Boolean =
