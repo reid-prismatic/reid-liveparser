@@ -104,6 +104,17 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
     private val _entities = mutableStateListOf<LiveParseEntityImpl<ENTITY>>()
     override val entities: List<LiveParseEntity<ENTITY>> get() = _entities
 
+    private fun validateEntities() {
+        var prev = -1
+        var prevId = EntityId.None
+        for( entity in _entities ) {
+            check(_entities.count { it.id == entity.id } == 1)
+            check(entity.startLine > prev) {"Entity ${entity.id} starts at ${entity.startLine} but prev ($prevId) ended at $prev"}
+            prev = entity.endLine
+            prevId = entity.id
+        }
+    }
+
     init {
         coroutineScope.launch {
             lineChangesFlow.collect { change ->
@@ -141,21 +152,28 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                     precedingContext = if(firstUnchangedLine > 0) _lines[firstUnchangedLine-1].context else initialContext
                 }
 
+                validateEntities()
+
+                println("CHANGE: ${change.startLine} prev=${change.prevLineCount} new=${change.newLineCount} delta=${change.newLineCount-change.prevLineCount}")
+
                 // Update entity start and end lines based on this change
                 fun remapLineNumber(lineNumber: Int): Int = when {
                     lineNumber < change.startLine -> lineNumber
-                    lineNumber >= change.startLine + change.prevLineCount -> lineNumber - change.prevLineCount + change.newLineCount
-                    change.newLineCount < change.prevLineCount -> lineNumber.coerceIn(change.startLine, change.startLine + change.newLineCount - 1)
+                    lineNumber >= change.startLine -> (lineNumber - change.prevLineCount + change.newLineCount).coerceAtLeast(change.startLine)
+                    change.newLineCount < change.prevLineCount -> lineNumber.coerceAtMost(change.startLine + change.newLineCount - 1).coerceAtLeast(change.startLine)
                     else -> lineNumber
-                }
+                }.also { println("Remap: $lineNumber -> $it") }
 
                 _entities.forEachIndexed { index, entity ->
                     val newStart = remapLineNumber(entity.startLine)
                     val newEnd = remapLineNumber(entity.endLine)
+                    println("Entity[$index] $entity: ${entity.startLine} -> $newStart / ${entity.endLine} -> $newEnd")
                     if( newStart != entity.startLine || newEnd != entity.endLine ) {
                         _entities[index] = _entities[index].copy(startLine = newStart, endLine = newEnd)
                     }
                 }
+
+//                validateEntities()
 
                 // "Affected lines" are Lines that were changed directly or had their context change as a result of a
                 // modification to a preceding line.
@@ -191,10 +209,13 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                     val workingEntityLineRange = workingEntityStartLine..workingEntityEndLine
                     if( nextEntityIndex < _entities.size ) {
                         val nextEntity = _entities[nextEntityIndex]
+                        println("Processing entity: $workingEntityLineRange (nextEntity.id=${nextEntity.id} workingEntityId=$workingEntityId)")
                         if( nextEntity.id == workingEntityId ) {
                             if (nextEntity.lineRange == workingEntityLineRange && nextEntity.lineRange notIntersects affectedLineRange) {
+                                println("Just inc: e=${nextEntity.lineRange} w=$workingEntityLineRange a=$affectedLineRange")
                                 nextEntityIndex++
                             } else {
+                                println("Update")
                                 existingEntity = nextEntity.entity
                                 val newEntity = entityParseScope.parseEntity()
                                 existingEntity = null
@@ -205,8 +226,16 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                                     workingEntityEndLine
                                 )
                                 nextEntityIndex++
+                                println("nextEntityIndex=$nextEntityIndex _entities.size=${_entities.size} _entities[nextEntityIndex].startLine=${_entities.getOrNull(nextEntityIndex)?.startLine} workingEntityEndLine=$workingEntityEndLine")
+                                while(nextEntityIndex < _entities.size && _entities[nextEntityIndex].startLine <= workingEntityEndLine ) {
+                                    println("Remove following entity")
+                                    _entities.removeAt(nextEntityIndex)
+                                    println("nextEntityIndex=$nextEntityIndex _entities.size=${_entities.size} _entities[nextEntityIndex].startLine=${_entities.getOrNull(nextEntityIndex)?.startLine} workingEntityEndLine=$workingEntityEndLine")
+                                }
+                                println("nextEntityIndex=$nextEntityIndex _entities.size=${_entities.size} _entities[nextEntityIndex].startLine=${_entities.getOrNull(nextEntityIndex)?.startLine} workingEntityEndLine=$workingEntityEndLine")
                             }
                         } else if(nextEntity.startLine > workingEntityEndLine) {
+                            println("New?")
                             existingEntity = null
                             val newEntity = entityParseScope.parseEntity()
                             _entities.add(nextEntityIndex, LiveParseEntityImpl(
@@ -217,6 +246,7 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                             ))
                             nextEntityIndex++
                         } else {
+                            println("Replace?")
                             existingEntity = null
                             val newEntity = entityParseScope.parseEntity()
                             _entities[nextEntityIndex] = LiveParseEntityImpl(
@@ -228,6 +258,7 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                             nextEntityIndex++
                         }
                     } else {
+                        println("Processing entity: $workingEntityLineRange (workingEntityId=$workingEntityId)")
                         existingEntity = null
                         val newEntity = entityParseScope.parseEntity()
                         _entities.add(nextEntityIndex, LiveParseEntityImpl(
@@ -243,7 +274,9 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                 _lines.forEachIndexed { index, line ->
                     if(line.context.isBlockStart) {
                         workingEntityEndLine = index-1
+//                        validateEntities()
                         processEntity()
+//                        validateEntities()
                         workingEntityStartLine = index
                         workingEntityId = line.entityId
                         workingEntityContext = line.context
@@ -252,6 +285,7 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                 }
                 workingEntityEndLine = _lines.size-1
                 processEntity()
+                validateEntities()
 
 //                var entityIndex = when {
 //                    _entities.isEmpty() || firstAffectedLine < _entities.first().startLine -> 0

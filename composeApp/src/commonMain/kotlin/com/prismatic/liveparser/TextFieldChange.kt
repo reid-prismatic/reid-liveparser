@@ -64,7 +64,27 @@ private fun computeChangedLines(a: CharSequence, b: CharSequence) : ChangedLines
     val aLines = a.lineSequence().count()
     val bLines = b.lineSequence().count()
     val lineDelta = newContent.size - prevContent.size
-    check(aLines + lineDelta == bLines)
+    if( aLines + lineDelta != bLines ) {
+        println("===========!!!!!!")
+        println("A: $aLines")
+        a.lineSequence().forEachIndexed { index, line ->
+            println(" A $index: $line")
+        }
+        println("B: $bLines")
+        b.lineSequence().forEachIndexed { index, line ->
+            println(" B $index: $line")
+        }
+        println("Prev Content: ${prevContent.size}")
+        prevContent.forEachIndexed { index, line ->
+            println(" PREV $index: $line")
+        }
+        println("New Content: ${newContent.size}")
+        newContent.forEachIndexed { index, line ->
+            println(" NEW $index: $line")
+        }
+        println("===========<<<<<<")
+    }
+    check(aLines + lineDelta == bLines) {"$aLines + $lineDelta != $bLines"}
     return ChangedLinesInfoImpl(
         startLine = lineBreaksBefore,
         prevLineCount = prevContent.size,
