@@ -154,6 +154,9 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
 
                 validateEntities()
 
+                println()
+                println()
+                println("=================================================================================")
                 println("CHANGE: ${change.startLine} prev=${change.prevLineCount} new=${change.newLineCount} delta=${change.newLineCount-change.prevLineCount}")
 
                 // Update entity start and end lines based on this change
@@ -203,6 +206,7 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                 }
 
                 fun processEntity() {
+                    println("----------")
                     existingEntity = null
                     if( workingEntityStartLine < 0 ) return                     // Didn't find start of entity yet
                     if( workingEntityEndLine < workingEntityStartLine ) return  // Entity body would have zero length
@@ -285,6 +289,8 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
                 }
                 workingEntityEndLine = _lines.size-1
                 processEntity()
+                while( nextEntityIndex < _entities.size )
+                    _entities.removeAt(nextEntityIndex)
                 validateEntities()
 
 //                var entityIndex = when {
