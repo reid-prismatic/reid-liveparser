@@ -28,6 +28,15 @@ public interface ChangedLinesInfo : ChangedLinesRange {
     val newLines: List<String>
 }
 
+public fun ChangedLinesInfo.isNewlineInsertion() : Boolean {
+    if( newLineCount-prevLineCount!=1 ) return false
+    if(newLines.firstOrNull() != "") return false
+    for( i in 0..<prevLineCount ) {
+        if( prevLines[i] != newLines[i+1]) return false
+    }
+    return true
+}
+
 private data class ChangedLinesInfoImpl(
     override val startLine: Int,
     override val prevLineCount: Int,

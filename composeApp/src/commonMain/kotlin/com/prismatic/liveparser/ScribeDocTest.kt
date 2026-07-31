@@ -132,7 +132,9 @@ fun LineDetail(line: LiveParseLine<LineType>) {
         LineType.SegmentBreak -> Color(0.353f, 0.353f, 0.353f, 1.0f)
     })) {
         Text(line.line, Modifier.height(16.5.dp).align(Alignment.TopStart), color=Color.Blue, fontSize=13.sp)
-        Text(line.context.toString() + " ${line.entityId} / " + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color.Red, fontSize=13.sp, textAlign = TextAlign.End)
+        val eidStr = if(line.context.isBlockStart) "${line.entityId} / " else ""
+        val contextStr = if(line.context == LineType.Blank) "" else "${line.context}"
+        Text("$contextStr $eidStr" + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color.Red, fontSize=13.sp, textAlign = TextAlign.End)
     }
 }
 

@@ -117,12 +117,24 @@ private class LiveParseImpl<CONTEXT:LiveParseLineContext, ENTITY:Any>(
 
     init {
         coroutineScope.launch {
-            lineChangesFlow.collect { change ->
+            lineChangesFlow.collect { rawChange ->
+
+                val change = if(rawChange.isNewlineInsertion() && rawChange.startLine > 0 && _lines[rawChange.startLine-1].line.isEmpty()) {
+                    object : ChangedLinesInfo {
+                        override val prevLines: List<String> = listOf("")
+                        override val newLines: List<String> = listOf("","")
+                        override val startLine: Int = rawChange.startLine-1
+                        override val prevLineCount: Int = 1
+                        override val newLineCount: Int = 2
+
+                    }
+                } else { rawChange }
 
                 // Update any lines that were actually modified by this change, including
                 // updating their contexts.
                 var prevContext = if(change.startLine <= 0) initialContext else _lines[change.startLine-1].context
                 change.newLines.forEachIndexed { i, line ->
+                    // TODO: Handle inserted blank lines better so new EID isn't allocated needlessly
                     val newContext = computeContext(line, prevContext)
                     val entityId = if( i < change.prevLineCount && _lines[change.startLine+i].context == newContext ) {
                         _lines[change.startLine+i].entityId
