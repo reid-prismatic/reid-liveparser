@@ -1,7 +1,6 @@
 package com.prismatic.liveparser
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -19,6 +18,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -40,10 +41,137 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.prismatic.opus.math.Vec2
+import org.prismatic.opus.math.Vec3
+import org.prismatic.opus.math.Vec4
+import org.prismatic.opus.time.FrameRate
+import org.prismatic.opus.time.MediaTime
+import org.prismatic.opus.time.Time
 
-private data class ScribeEntity(
-    val type: LineType,
+interface ScribeEntity {
+    val type: LineType
+    companion object {
+        val None = object : ScribeEntity {
+            override val type: LineType = LineType.None
+        }
+    }
+}
+
+@Immutable
+interface MarkdownProperties : ScribeEntity{
+    val range: TextRange
+    val propRanges: Map<String,TextRange>
+    val parseErrors: List<CodeError>
+    //    val lineNumber: Int
+    val lineRange: IntRange
+    val position: Vec2
+    val size: Vec2
+    val color: Vec4
+    val font: String
+    val bold: Boolean
+    val maxWidth: Float
+    val italic: Boolean
+    val fontSize: Float
+    val scale: Vec2
+    val filters: List<String>
+    val duration: Time
+    val comment: String?
+    val voice: String
+    val rotateAxis: Vec3
+    val rotateAngle: Float
+}
+
+data class EntityTiming(val delayNext: Boolean, val background: Boolean)
+
+interface OutputFormat {
+    val outputName: String
+    val resolution: Int
+    val ratio: Pair<Int,Int>
+    val frameRate: FrameRate
+}
+
+val OutputFormat.width: Int get() = if(ratio.first > ratio.second) resolution * ratio.first / ratio.second else resolution
+val OutputFormat.height: Int get() = if(ratio.first > ratio.second) resolution else resolution * ratio.second / ratio.first
+val OutputFormat.ratioFraction: Float get() = ratio.first.toFloat() / ratio.second.toFloat()
+
+@Immutable
+sealed interface MarkdownEntity : ScribeEntity, MarkdownProperties {
+    data class Style(val props: MarkdownProperties, val styleName: String): MarkdownEntity, MarkdownProperties by props
+    data class Code(val props: MarkdownProperties, val code: String): MarkdownEntity, MarkdownProperties by props
+    data class CodeSample(val props: MarkdownProperties, val code: String, val codeLanguage: String): MarkdownEntity, MarkdownProperties by props
+    data class Output(val props: MarkdownProperties, override val outputName: String, override val resolution: Int, override val ratio: Pair<Int,Int>, override val frameRate: FrameRate): OutputFormat, MarkdownEntity, MarkdownProperties by props
+    data class Text(val props: MarkdownProperties, val text: String): MarkdownEntity, MarkdownProperties by props
+    data class Voiceover(val props: MarkdownProperties, val text: String, val timing: EntityTiming, val filename: String): MarkdownEntity, MarkdownProperties by props
+    data class Media(val props: MarkdownProperties, val filename: String, val timing: EntityTiming): MarkdownEntity, MarkdownProperties by props
+//    data class Include(
+//        val props: MarkdownProperties,
+//        val filename: String,
+//        val timing: EntityTiming,
+//        val vars: Map<String, String>,
+//        val md: MarkdownParseResult? = null,
+//    ): MarkdownEntity, MarkdownProperties by props {
+//        val sections = md?.entities?.segmented()
+//        val id = "${lineRange.first}:$filename"
+//    }
+    data class Divider(val props: MarkdownProperties, val transition: String): MarkdownEntity, MarkdownProperties by props
+    data class Delay(val props: MarkdownProperties, val delayTime: MediaTime): MarkdownEntity, MarkdownProperties by props
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseConcreteEntity(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseDefinitionEntity(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseSegmentBreak(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseCodeBlockEntity(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseScriptEntity(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseDelayEntity(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.processSyntaxError(): ScribeEntity {
+
+}
+
+private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntity(firstLineType: LineType): ScribeEntity {
+    return when (firstLineType) {
+        LineType.None, LineType.Blank -> ScribeEntity.None
+        LineType.ConcreteEntityStart -> parseConcreteEntity()
+        LineType.DelayEntityStart -> parseDelayEntity()
+        LineType.DefinitionEntityStart -> parseDefinitionEntity()
+        LineType.SegmentBreak -> parseSegmentBreak()
+        LineType.CodeStart -> parseCodeBlockEntity()
+        LineType.ScriptStart -> parseScriptEntity()
+        LineType.SyntaxError -> processSyntaxError()
+        LineType.ConcreteEntityBody,
+        LineType.Property,
+        LineType.ScriptContinue,
+        LineType.DefinitionEntityBody,
+        LineType.ScriptEnd,
+        LineType.CodeContinue,
+        LineType.CodeEnd -> throw IllegalStateException("Not a valid entity start line: $firstLineType")
+    }
+}
+
+data class CodeError(
+    val message: String,
+    val line: Int,
+    val char: Int,
+    val data: Any?
 )
+
 
 @Composable
 fun ScribeDocTest() {
@@ -55,12 +183,12 @@ fun ScribeDocTest() {
     val listState = rememberLazyListState()
     val liveParse = textFieldState.rememberLiveParse(
         initialContext = LineType.None,
-        nullEntity = ScribeEntity(LineType.None),
+        nullEntity = ScribeEntity.None,
         computeContext = { line, context ->
             getLineType(line, context)
         },
         parseEntity = {
-            ScribeEntity(context)
+            parseEntity(context)
         }
     )
 //    val scribeDocState = remember { ScribeDocumentState(scope) }
@@ -123,6 +251,7 @@ fun LineDetail(line: LiveParseLine<LineType>) {
         LineType.DefinitionEntityStart -> Color(1.0f, 0.8f, 0.6f)
         LineType.DefinitionEntityBody -> Color(1.0f, 0.9f, 0.8f)
         LineType.CodeStart -> Color(1.0f, 0.6f, 0.773f, 1.0f)
+        LineType.DelayEntityStart -> Color(0.91f, 0.376f, 0.78f, 1.0f)
         LineType.CodeContinue -> Color(0.898f, 0.537f, 0.69f, 1.0f)
         LineType.CodeEnd -> Color(0.824f, 0.471f, 0.62f, 1.0f)
         LineType.ScriptStart -> Color(0.478f, 0.91f, 0.761f, 1.0f)

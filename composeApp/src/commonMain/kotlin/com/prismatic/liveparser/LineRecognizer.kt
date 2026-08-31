@@ -5,6 +5,7 @@ enum class LineType(override val isBlockStart: Boolean = false) : LiveParseLineC
     Blank,
     ConcreteEntityStart(true),
     ConcreteEntityBody,
+    DelayEntityStart(isBlockStart = true),
     Property,
     DefinitionEntityStart(true),
     DefinitionEntityBody,
@@ -30,7 +31,7 @@ fun getLineType( line: String, prevLineType: LineType = LineType.None): LineType
             else -> LineType.SyntaxError
         }
         LineType.Blank, LineType.ScriptEnd, LineType.CodeEnd -> line.decomposeLine().contextFreeType
-        LineType.ConcreteEntityStart, LineType.ConcreteEntityBody -> {
+        LineType.ConcreteEntityStart, LineType.ConcreteEntityBody, LineType.DelayEntityStart -> {
             val decomposed = line.decomposeLine()
             when {
                 decomposed.isBlankLine -> LineType.Blank
@@ -90,6 +91,7 @@ val DecomposedLine.isCodeBlockStart: Boolean get() = firstChar == '`' && body.st
 val DecomposedLine.isScriptEnd: Boolean get() = firstChar == '}' && trimmedBody.length==1
 val DecomposedLine.isCodeBlockEnd: Boolean get() = firstChar == '`' && trimmedBody=="```"
 val DecomposedLine.isPropertyLine: Boolean get() = firstChar == '-' && body.startsWith("- ")
+val DecomposedLine.isDelayEntityStart: Boolean get() = firstChar == '+'
 val DecomposedLine.isBlankLine: Boolean get() = trimmedBody.isEmpty()
 val DecomposedLine.isTextEntityStart: Boolean get() = firstChar.isLetterOrDigit() || firstChar in "._\""
 val DecomposedLine.isVoiceoverEntityStart: Boolean get() = firstChar == '>' && trimmedBody.drop(1).firstOrNull { !it.isWhitespace() }?.isLetterOrDigit() ?: false
@@ -103,6 +105,7 @@ val DecomposedLine.contextFreeType get() = when {
     isScriptEnd -> LineType.ScriptEnd
     isCodeBlockStart -> LineType.CodeStart
     isCodeBlockEnd -> LineType.CodeEnd
+    isDelayEntityStart -> LineType.DelayEntityStart
     isPropertyLine -> LineType.Property
     isTextEntityStart -> LineType.ConcreteEntityStart
     isVoiceoverEntityStart -> LineType.ConcreteEntityStart
