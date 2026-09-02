@@ -117,44 +117,104 @@ sealed interface MarkdownEntity : ScribeEntity, MarkdownProperties {
     data class Delay(val props: MarkdownProperties, val delayTime: MediaTime): MarkdownEntity, MarkdownProperties by props
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseConcreteEntity(): ScribeEntity {
+private fun LWEntityParseScope.parseMediaEntity(): ScribeEntity {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseDefinitionEntity(): ScribeEntity {
+private fun LWEntityParseScope.buildProps() : MarkdownProperties {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseSegmentBreak(): ScribeEntity {
+private fun LWEntityParseScope.buildTiming() : EntityTiming {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseCodeBlockEntity(): ScribeEntity {
+private fun LWEntityParseScope.parseConcreteEntity(): ScribeEntity {
+    when {
+        firstLine.isConcreteEntityStart -> {
+            val concreteEntitySpec = firstLine.trimmedBody.removeSurrounding("[","]").trim()
+            val entityTypeDelimiterIndex = concreteEntitySpec.indexOf(':')
+            val extIndex = concreteEntitySpec.indexOf('.')
+            val ext = if(extIndex>=0 && extIndex > entityTypeDelimiterIndex) concreteEntitySpec.drop(extIndex+1).trim().lowercase() else ""
+            val entityType = when {
+                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything before it is the type.
+                    concreteEntitySpec.take(entityTypeDelimiterIndex).trim()
+                extIndex < 0 -> concreteEntitySpec.trim()   // There's no ':' and no extension, so the whole thing is the type.
+                else -> ""
+            }
+            val entitySpec = when {
+                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything after it is the spec.
+                    concreteEntitySpec.drop(entityTypeDelimiterIndex + 1).trim()
+                extIndex >= 0 -> concreteEntitySpec.trim() // When there's no colon, but there is an extension, the whole thing is the spec.
+                else -> ""
+            }
+
+            when(entityType) {
+                "text" -> TODO()
+                "voiceover" -> MarkdownEntity.Voiceover(buildProps(),bodyLines.joinToString("\n"), buildTiming(), entitySpec)
+                "video" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+                "audio" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+                "media" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+                "" -> when(ext) {
+                    "png","jpg","jpeg","bmp","mov","gif" -> TODO()
+                    "wav","mp3","m4a","aac","flac" -> TODO()
+                    "txt" -> TODO()
+                    else -> TODO()
+                }
+                else -> TODO()
+            }
+
+        }
+        firstLine.isTextEntityStart -> {
+
+        }
+        firstLine.isVoiceoverEntityStart -> {
+
+        }
+    }
+}
+
+private fun LWEntityParseScope.parseDefinitionEntity(): ScribeEntity {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseScriptEntity(): ScribeEntity {
+private fun LWEntityParseScope.parseSegmentBreak(): ScribeEntity {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseDelayEntity(): ScribeEntity {
+private fun LWEntityParseScope.parseCodeBlockEntity(): ScribeEntity {
 
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.processSyntaxError(): ScribeEntity {
+private fun LWEntityParseScope.parseScriptEntity(): ScribeEntity {
 
+}
+
+private fun LWEntityParseScope.parseDelayEntity(): ScribeEntity {
+
+}
+
+private fun LWEntityParseScope.processSyntaxError(): ScribeEntity {
+
+}
+
+class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType,ScribeEntity>) : LiveParseEntityScope<LineType, ScribeEntity> by baseScope {
+    val firstLine = baseScope.entityLines.first().decomposeLine()
+    private val terminalLines = baseScope.entityLines.asReversed().asSequence().map { it.decomposeLine() }.takeWhile { it.isBlankLine || it.isPropertyLine }.toList().reversed()
+    val propertyLines = terminalLines.filter { it.isPropertyLine }
+    val bodyLines = entityLines.subList(1, entityLines.size - terminalLines.size)
 }
 
 private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntity(firstLineType: LineType): ScribeEntity {
     return when (firstLineType) {
         LineType.None, LineType.Blank -> ScribeEntity.None
-        LineType.ConcreteEntityStart -> parseConcreteEntity()
-        LineType.DelayEntityStart -> parseDelayEntity()
-        LineType.DefinitionEntityStart -> parseDefinitionEntity()
-        LineType.SegmentBreak -> parseSegmentBreak()
-        LineType.CodeStart -> parseCodeBlockEntity()
-        LineType.ScriptStart -> parseScriptEntity()
-        LineType.SyntaxError -> processSyntaxError()
+        LineType.ConcreteEntityStart -> LWEntityParseScope(this).parseConcreteEntity()
+        LineType.DelayEntityStart -> LWEntityParseScope(this).parseDelayEntity()
+        LineType.DefinitionEntityStart -> LWEntityParseScope(this).parseDefinitionEntity()
+        LineType.SegmentBreak -> LWEntityParseScope(this).parseSegmentBreak()
+        LineType.CodeStart -> LWEntityParseScope(this).parseCodeBlockEntity()
+        LineType.ScriptStart -> LWEntityParseScope(this).parseScriptEntity()
+        LineType.SyntaxError -> LWEntityParseScope(this).processSyntaxError()
         LineType.ConcreteEntityBody,
         LineType.Property,
         LineType.ScriptContinue,
