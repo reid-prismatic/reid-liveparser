@@ -46,7 +46,14 @@ import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
 import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
+import org.prismatic.opus.time.Millis
+import org.prismatic.opus.time.Nanos
+import org.prismatic.opus.time.Seconds
 import org.prismatic.opus.time.Time
+import org.prismatic.opus.time.millis
+import org.prismatic.opus.time.nanos
+import org.prismatic.opus.time.seconds
+import kotlin.reflect.KProperty
 
 interface ScribeEntity {
     val type: LineType
@@ -80,6 +87,32 @@ interface MarkdownProperties : ScribeEntity{
     val rotateAxis: Vec3
     val rotateAngle: Float
 }
+
+@Immutable
+private data class MarkdownPropertiesImpl(
+    override val type: LineType,
+    override val parseErrors: List<CodeError>,
+    override val range: TextRange,
+    override val propRanges: Map<String,TextRange>,
+    override val lineRange: IntRange,
+    override val position: Vec2 = Vec2.ZERO,
+    override val fontSize: Float = 56f,
+    override val size: Vec2 = Vec2.ZERO,
+    override val color: Vec4 = Vec4(0.7f,0.7f,0.7f,1f),
+    override val font: String = "Default",
+    override val bold: Boolean = false,
+    override val italic: Boolean = false,
+    override val maxWidth: Float = Float.NaN,
+    override val scale: Vec2 = Vec2(1f,1f),
+    override val filters: List<String> = emptyList(),
+    override val duration: Time = MediaTime.Unspecified,
+    override val comment: String? = null,
+    override val voice: String = "",
+    override val rotateAxis: Vec3 = Vec3(0f,0f,1f),
+    override val rotateAngle: Float = 0f,
+): MarkdownProperties
+
+
 
 data class EntityTiming(val delayNext: Boolean, val background: Boolean)
 
@@ -117,86 +150,206 @@ sealed interface MarkdownEntity : ScribeEntity, MarkdownProperties {
     data class Delay(val props: MarkdownProperties, val delayTime: MediaTime): MarkdownEntity, MarkdownProperties by props
 }
 
-private fun LWEntityParseScope.parseMediaEntity(): ScribeEntity {
+//private fun LWEntityParseScope.parseMediaEntity(): ScribeEntity {
+//
+//}
 
+//abstract class LWVisualElement(definition: Definition<*>) : LWElement(definition) {
+//    var position: Vec2 by prop()
+//}
+//
+//class LWTextElement : LWVisualElement(Definition) {
+//    var text : String by prop()
+//    companion object {
+//        val Definition = Definition<LWTextElement>()
+//    }
+//}
+//
+
+
+sealed class LWPropertyType {
+    data object Int : LWPropertyType()
+    data object Float : LWPropertyType()
+    data object Duration : LWPropertyType()
+    data object Vec2 : LWPropertyType()
+    data object Vec3 : LWPropertyType()
+    data object Vec4 : LWPropertyType()
+    data object Color : LWPropertyType()
+    data object String : LWPropertyType()
+    data object StringList : LWPropertyType()
+    data object Boolean : LWPropertyType()
+    data object Compound : LWPropertyType()
+    data class Enum(val enumValues: List<String>) : LWPropertyType()
 }
 
-private fun LWEntityParseScope.buildProps() : MarkdownProperties {
-
+enum class LWProperty(val key: String, val type: LWPropertyType) {
+    Position( "position", LWPropertyType.Vec2),
+    Offset( "offset", LWPropertyType.Vec2),
+    Size( "size",LWPropertyType.Vec2),
+    Color( "color", LWPropertyType.Color),
+    Font( "font",LWPropertyType.Compound),
+    Typeface( "typeface",LWPropertyType.String),
+    Bold( "bold",LWPropertyType.Boolean),
+    MaxWidth( "maxWidth",LWPropertyType.Float),
+    Italic( "italic",LWPropertyType.Boolean),
+    FontSize( "fontsize",LWPropertyType.Float),
+    Scale( "scale",LWPropertyType.Float),
+    Filters( "filters",LWPropertyType.StringList),
+    Duration( "duration",LWPropertyType.Duration),
+    Voice( "voice",LWPropertyType.String),
+    RotateAxis( "rotateAxis",LWPropertyType.Vec3),
+    RotateAngle( "rotateAngle",LWPropertyType.Float);
 }
 
-private fun LWEntityParseScope.buildTiming() : EntityTiming {
+val LWProperties: Map<String, LWProperty> = LWProperty.entries.associateBy(LWProperty::key)
+data class LWPropertyInstance<T>(
+    val key: String,
+    val prop: LWProperty,
+    val rawValue: String,
+    val value: T
+)
 
-}
-
-private fun LWEntityParseScope.parseConcreteEntity(): ScribeEntity {
-    when {
-        firstLine.isConcreteEntityStart -> {
-            val concreteEntitySpec = firstLine.trimmedBody.removeSurrounding("[","]").trim()
-            val entityTypeDelimiterIndex = concreteEntitySpec.indexOf(':')
-            val extIndex = concreteEntitySpec.indexOf('.')
-            val ext = if(extIndex>=0 && extIndex > entityTypeDelimiterIndex) concreteEntitySpec.drop(extIndex+1).trim().lowercase() else ""
-            val entityType = when {
-                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything before it is the type.
-                    concreteEntitySpec.take(entityTypeDelimiterIndex).trim()
-                extIndex < 0 -> concreteEntitySpec.trim()   // There's no ':' and no extension, so the whole thing is the type.
-                else -> ""
-            }
-            val entitySpec = when {
-                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything after it is the spec.
-                    concreteEntitySpec.drop(entityTypeDelimiterIndex + 1).trim()
-                extIndex >= 0 -> concreteEntitySpec.trim() // When there's no colon, but there is an extension, the whole thing is the spec.
-                else -> ""
-            }
-
-            when(entityType) {
-                "text" -> TODO()
-                "voiceover" -> MarkdownEntity.Voiceover(buildProps(),bodyLines.joinToString("\n"), buildTiming(), entitySpec)
-                "video" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
-                "audio" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
-                "media" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
-                "" -> when(ext) {
-                    "png","jpg","jpeg","bmp","mov","gif" -> TODO()
-                    "wav","mp3","m4a","aac","flac" -> TODO()
-                    "txt" -> TODO()
-                    else -> TODO()
-                }
-                else -> TODO()
-            }
-
-        }
-        firstLine.isTextEntityStart -> {
-
-        }
-        firstLine.isVoiceoverEntityStart -> {
-
-        }
+private inline fun <reified T> List<LWPropertyInstance<*>>.getProp(prop: LWProperty, default: T, combine: (T,T)->T = {a,b -> b}) : T {
+    asReversed().forEach {  }
+    var value = default
+    forEach { propInst ->
+        if( propInst.prop == prop && T::class.isInstance(propInst.value) )
+            value = combine( value, propInst.value as T )
     }
+    return value
 }
 
-private fun LWEntityParseScope.parseDefinitionEntity(): ScribeEntity {
+//private fun LWEntityParseScope.buildProps() : MarkdownProperties {
+//    val errors = mutableListOf<CodeError>()
+//    val properties = mutableListOf<LWPropertyInstance<*>>()
+//    for ((lineIndex, line) in propertyLines.withIndex()) {
+//        val propName = line.trimmedBody.substringBefore(':',"").removePrefix("-").trim()
+//        val propValue = line.trimmedBody.substringAfter(':',"").trim()
+//        if( propName.isEmpty() ) {
+//            errors.add( codeError("Missing property name", line = lineIndex))
+//            continue
+//        }
+//        val prop = LWProperties[propName]
+//        if( prop == null ) {
+//            errors.add( codeError("Unknown property name: $propName", line = lineIndex))
+//            continue
+//        }
+//        when(prop.type) {
+//            LWPropertyType.Boolean -> {
+//                when(propValue) {
+//                    "true" -> properties.add(LWPropertyInstance(propName, prop, propValue, true))
+//                    "false" -> properties.add(LWPropertyInstance(propName, prop, propValue, false))
+//                    else -> errors.add( codeError("Invalid property value", line = lineIndex))
+//                }
+//            }
+//            LWPropertyType.Color -> {
+//                propValue.toColorVec4OrNull()
+//            }
+//            LWPropertyType.Compound -> TODO()
+//            LWPropertyType.Duration -> TODO()
+//            is LWPropertyType.Enum -> TODO()
+//            LWPropertyType.Float -> TODO()
+//            LWPropertyType.Int -> TODO()
+//            LWPropertyType.String -> TODO()
+//            LWPropertyType.StringList -> TODO()
+//            LWPropertyType.Vec2 -> TODO()
+//            LWPropertyType.Vec3 -> TODO()
+//            LWPropertyType.Vec4 -> TODO()
+//        }
+//    }
+//    return MarkdownPropertiesImpl(
+//        type = context,
+//        parseErrors = errors,
+//        position = TODO(),
+//        fontSize = TODO(),
+//        size = TODO(),
+//        color = TODO(),
+//        font = TODO(),
+//        bold = properties.getProp(LWProperty.Bold,false),
+//        italic = TODO(),
+//        maxWidth = TODO(),
+//        scale =  properties.getProp(LWProperty.Scale,Vec2(1f,1f)) {a, b -> a*b},
+//        filters = TODO(),
+//        duration = TODO(),
+//        comment = TODO(),
+//        voice = TODO(),
+//        rotateAxis = TODO(),
+//        rotateAngle = TODO()
+//    )
+//}
 
-}
+//private fun LWEntityParseScope.buildTiming() : EntityTiming {
+//
+//}
 
-private fun LWEntityParseScope.parseSegmentBreak(): ScribeEntity {
+//private fun LWEntityParseScope.parseConcreteEntity(): ScribeEntity {
+//    when {
+//        firstLine.isConcreteEntityStart -> {
+//            val concreteEntitySpec = firstLine.trimmedBody.removeSurrounding("[","]").trim()
+//            val entityTypeDelimiterIndex = concreteEntitySpec.indexOf(':')
+//            val extIndex = concreteEntitySpec.indexOf('.')
+//            val ext = if(extIndex>=0 && extIndex > entityTypeDelimiterIndex) concreteEntitySpec.drop(extIndex+1).trim().lowercase() else ""
+//            val entityType = when {
+//                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything before it is the type.
+//                    concreteEntitySpec.take(entityTypeDelimiterIndex).trim()
+//                extIndex < 0 -> concreteEntitySpec.trim()   // There's no ':' and no extension, so the whole thing is the type.
+//                else -> ""
+//            }
+//            val entitySpec = when {
+//                entityTypeDelimiterIndex >= 0 -> // When there's a ':' everything after it is the spec.
+//                    concreteEntitySpec.drop(entityTypeDelimiterIndex + 1).trim()
+//                extIndex >= 0 -> concreteEntitySpec.trim() // When there's no colon, but there is an extension, the whole thing is the spec.
+//                else -> ""
+//            }
+//
+//            when(entityType) {
+//                "text" -> TODO()
+//                "voiceover" -> MarkdownEntity.Voiceover(buildProps(),bodyLines.joinToString("\n"), buildTiming(), entitySpec)
+//                "video" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+//                "audio" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+//                "media" -> MarkdownEntity.Media(buildProps(),entitySpec, buildTiming())
+//                "" -> when(ext) {
+//                    "png","jpg","jpeg","bmp","mov","gif" -> TODO()
+//                    "wav","mp3","m4a","aac","flac" -> TODO()
+//                    "txt" -> TODO()
+//                    else -> TODO()
+//                }
+//                else -> TODO()
+//            }
+//
+//        }
+//        firstLine.isTextEntityStart -> {
+//
+//        }
+//        firstLine.isVoiceoverEntityStart -> {
+//
+//        }
+//    }
+//}
 
-}
-
-private fun LWEntityParseScope.parseCodeBlockEntity(): ScribeEntity {
-
-}
-
-private fun LWEntityParseScope.parseScriptEntity(): ScribeEntity {
-
-}
-
-private fun LWEntityParseScope.parseDelayEntity(): ScribeEntity {
-
-}
-
-private fun LWEntityParseScope.processSyntaxError(): ScribeEntity {
-
-}
+//private fun LWEntityParseScope.parseDefinitionEntity(): ScribeEntity {
+//
+//}
+//
+//private fun LWEntityParseScope.parseSegmentBreak(): ScribeEntity {
+//
+//}
+//
+//private fun LWEntityParseScope.parseCodeBlockEntity(): ScribeEntity {
+//
+//}
+//
+//private fun LWEntityParseScope.parseScriptEntity(): ScribeEntity {
+//
+//}
+//
+//private fun LWEntityParseScope.parseDelayEntity(): ScribeEntity {
+//
+//}
+//
+//private fun LWEntityParseScope.processSyntaxError(): ScribeEntity {
+//
+//}
 
 class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType,ScribeEntity>) : LiveParseEntityScope<LineType, ScribeEntity> by baseScope {
     val firstLine = baseScope.entityLines.first().decomposeLine()
@@ -205,32 +358,45 @@ class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType,Sc
     val bodyLines = entityLines.subList(1, entityLines.size - terminalLines.size)
 }
 
-private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntity(firstLineType: LineType): ScribeEntity {
-    return when (firstLineType) {
-        LineType.None, LineType.Blank -> ScribeEntity.None
-        LineType.ConcreteEntityStart -> LWEntityParseScope(this).parseConcreteEntity()
-        LineType.DelayEntityStart -> LWEntityParseScope(this).parseDelayEntity()
-        LineType.DefinitionEntityStart -> LWEntityParseScope(this).parseDefinitionEntity()
-        LineType.SegmentBreak -> LWEntityParseScope(this).parseSegmentBreak()
-        LineType.CodeStart -> LWEntityParseScope(this).parseCodeBlockEntity()
-        LineType.ScriptStart -> LWEntityParseScope(this).parseScriptEntity()
-        LineType.SyntaxError -> LWEntityParseScope(this).processSyntaxError()
-        LineType.ConcreteEntityBody,
-        LineType.Property,
-        LineType.ScriptContinue,
-        LineType.DefinitionEntityBody,
-        LineType.ScriptEnd,
-        LineType.CodeContinue,
-        LineType.CodeEnd -> throw IllegalStateException("Not a valid entity start line: $firstLineType")
-    }
-}
+//private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntity(firstLineType: LineType): ScribeEntity {
+//    return when (firstLineType) {
+//        LineType.None, LineType.Blank -> ScribeEntity.None
+//        LineType.ConcreteEntityStart -> LWEntityParseScope(this).parseConcreteEntity()
+//        LineType.DelayEntityStart -> LWEntityParseScope(this).parseDelayEntity()
+//        LineType.DefinitionEntityStart -> LWEntityParseScope(this).parseDefinitionEntity()
+//        LineType.SegmentBreak -> LWEntityParseScope(this).parseSegmentBreak()
+//        LineType.CodeStart -> LWEntityParseScope(this).parseCodeBlockEntity()
+//        LineType.ScriptStart -> LWEntityParseScope(this).parseScriptEntity()
+//        LineType.SyntaxError -> LWEntityParseScope(this).processSyntaxError()
+//        LineType.ConcreteEntityBody,
+//        LineType.Property,
+//        LineType.ScriptContinue,
+//        LineType.DefinitionEntityBody,
+//        LineType.ScriptEnd,
+//        LineType.CodeContinue,
+//        LineType.CodeEnd -> throw IllegalStateException("Not a valid entity start line: $firstLineType")
+//    }
+//}
+//
+//private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntityB(firstLineType: LineType): ScribeEntity {
+//
+//}
 
 data class CodeError(
     val message: String,
+    val entityId: EntityId,
     val line: Int,
     val char: Int,
     val data: Any?
 )
+
+fun LWEntityParseScope.codeError(
+    message: String,
+    entityId: EntityId = this.entityId,
+    line: Int = 0,
+    char: Int = 0,
+    data: Any? = null
+): CodeError = CodeError(message, entityId, line, char, data)
 
 
 @Composable
@@ -248,7 +414,8 @@ fun ScribeDocTest() {
             getLineType(line, context)
         },
         parseEntity = {
-            parseEntity(context)
+            parseElement(context)
+//            parseEntity(context)
         }
     )
 //    val scribeDocState = remember { ScribeDocumentState(scope) }
