@@ -147,6 +147,7 @@ sealed class PropertyExpression : ParsedProperty {
         internal set
 
     abstract fun toDebugString(): String
+    open fun toFlatString(): String = toDebugString()
 
     /** `42`, `0xFF` */
     data class IntegerLiteral(val value: Long) : PropertyExpression() {
@@ -166,6 +167,7 @@ sealed class PropertyExpression : ParsedProperty {
     /** `"text"` or `'text'`; [value] has its escape sequences resolved. */
     data class StringLiteral(val value: String) : PropertyExpression() {
         override fun toDebugString(): String = "\"$value\""
+        override fun toFlatString(): String = value
     }
 
     /** `#RRGGBB` (fully opaque) or `#AARRGGBB`; [argb] is always the full `0xAARRGGBB` value. */
@@ -177,6 +179,7 @@ sealed class PropertyExpression : ParsedProperty {
 
         override fun toString(): String = "ColorLiteral(#${argb.toString(16).padStart(8, '0')})"
         override fun toDebugString(): String = "ColorLiteral($alpha, $red, $green, $blue)"
+        override fun toFlatString(): String = "#${argb.toString(16).padStart(8, '0')}"
     }
 
     /** `250ms`, `1.5s`, `2min` (or `2m`), `1h`: [value] is the number as written, in [unit]s. */
