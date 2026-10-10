@@ -1,5 +1,7 @@
 package com.prismatic.liveparser
 
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -13,48 +15,50 @@ import org.prismatic.opus.time.nanos
 import org.prismatic.opus.time.seconds
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElement {
+fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElement<*> {
     val scope = LWEntityParseScope(this)
     val matches = elements.filter { with(it){scope.recognize()} }
-    val match = matches.singleOrNull() ?: return ErrorElement(ElementPropertyAdapter.DefaultElement)
-    match.properties.forEach { property ->
-        property
-    }
+    val match = matches.singleOrNull() ?: return ErrorElement()
+    val inst = match.makeInstance()
+    val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
+    val propLines = entityLines.drop(bodyLines.size)
+
 }
 
-class TextElement(adapter: ElementPropertyAdapter) : ConcreteElement(
-    adapter = adapter,
+class TextElement() : ConcreteElement<TextElement>(
     namespace = "TextElement",
     shorthandRecognizer = { firstLine.isTextEntityStart }
 ) {
-    val text: String by prop()
-    val position: Vec2 by prop()
-    companion object {
-        val Default = TextElement(ElementPropertyAdapter.DefaultElement)
-    }
+    val fontSize by prop(12.pt)
+    val typeface by prop("")
+    val weight by prop(FontWeight.Bold)
+    val fontStyle by prop(FontStyle.Normal)
+    val font by prop(fontSize, typeface, weight, fontStyle)
+    val text by prop("")
+    val position by prop(Vec2.ZERO)
 
-    override fun LWEntityParseScope.parse(): LWElement {
+    override fun LWEntityParseScope.parse(): TextElement {
         TODO("Not yet implemented")
     }
+
+    override fun makeInstance(): TextElement = TextElement()
 }
 
-abstract class ConcreteElement(
-    adapter: ElementPropertyAdapter,
+abstract class ConcreteElement<T: ConcreteElement<T>>(
     val namespace: String,
     val shorthandRecognizer: LWEntityParseScope.() -> Boolean = { false }
-) : LWElement(adapter) {
+) : LWElement<T>() {
     override fun LWEntityParseScope.recognize(): Boolean = isConcreteEntity(namespace) || shorthandRecognizer()
 }
 
-class ErrorElement(
-    adapter: ElementPropertyAdapter,
-) : LWElement(adapter) {
+class ErrorElement : LWElement<ErrorElement>() {
     override fun LWEntityParseScope.recognize(): Boolean = false
-    override fun LWEntityParseScope.parse(): LWElement = this@ErrorElement
+    override fun LWEntityParseScope.parse(): ErrorElement = this@ErrorElement
+    override fun makeInstance(): ErrorElement = ErrorElement()
 }
 
-val elements = listOf<LWElement>(
-    TextElement.Default
+val elements = listOf<LWElement<*>>(
+    TextElement()
 )
 
 fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
@@ -62,50 +66,73 @@ fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
             && (':' in firstLine.trimmedBody || '.' !in firstLine.trimmedBody)
             && firstLine.trimmedBody.removeSurrounding("[","]").substringBefore(':') == namespace
 
-abstract class LWElement(
-    private val adapter: ElementPropertyAdapter
-) {
+abstract class LWElement<T: LWElement<T>> {
 
     abstract fun LWEntityParseScope.recognize() : Boolean
-    abstract fun LWEntityParseScope.parse() : LWElement
+    abstract fun LWEntityParseScope.parse() : T
+    abstract fun makeInstance() : T
 
-    var properties : List<Prop<*>> = emptyList()
+    var propertyList : List<Prop<*>> = emptyList()
         private set
+
+    val properties: Map<String, Prop<*>> by lazy {propertyList.associateBy { it.key }}
 
     interface Prop<T> {
         val key: String
         val displayName: String
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): T
-        operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T)
+        fun update(value: String)
     }
+
+    interface PropMember<T> {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T>
+    }
+
     private inner class PropImpl<T>(
         val defaultValue: T,
         override val key: String,
         override val displayName: String,
-        val parser: (String) -> T?
-    ) : Prop<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T =
-            adapter.getProperty(key)?.let {parser(it)} ?: defaultValue
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
-            adapter.setProperty(key, value.toString())
+        val type: PropertyType,
+//        val parser: (String) -> T?
+    ) : Prop<T>, PropMember<T> {
+        var propValue: T = defaultValue
+        override fun update(value: String) {
+            propValue = parser(value) ?: defaultValue
         }
+        override fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T> = this@PropImpl
     }
     interface PropProvider<T> {
-        operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): Prop<T>
+        operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): PropMember<T>
     }
-    inline fun <reified T> prop(
-        noinline defaultValue: (()->T)? = null,
-        key: String? = null,
-        displayName: String? = null,
-        noinline parser: ((String) -> T?)? = null
-    ) : PropProvider<T> {
-        return prop(defaultValue?.invoke() ?: defaultValueForType(), key, displayName, parser ?: parserForType() )
-    }
-    fun <T> prop(
+
+//    inline fun <reified T> prop(
+//        noinline defaultValue: (()->T)? = null,
+//        key: String? = null,
+//        displayName: String? = null,
+//        type: PropertyType? = null,
+//        noinline parser: ((String) -> T?)? = null
+//    ) : PropProvider<T> {
+//        return propProvider(defaultValue?.invoke() ?: defaultValueForType(), key, displayName, type ?: inferPropertyType<T>(), parser ?: parserForType() )
+//    }
+
+    fun prop(defaultValue: Int): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
+    fun prop(defaultValue: Float): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
+    fun prop(defaultValue: Double): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
+    fun prop(defaultValue: Long): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
+    fun prop(defaultValue: String): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String))
+    fun prop(defaultValue: Vec2): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2))
+    fun prop(defaultValue: Vec3): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3))
+    fun prop(defaultValue: Vec4): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4))
+    fun prop(defaultValue: LWDimension): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension))
+    fun prop(defaultValue: FontWeight): PropProvider<FontWeight> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension))
+    fun prop(defaultValue: FontStyle): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"))
+    fun prop(vararg components: Prop<*>) : PropProvider<Prop<*>> = TODO()
+
+    fun <T> propProvider(
         defaultValue: T,
         key: String? = null,
         displayName: String? = null,
-        parser: (String) -> T?
+        type: PropertyType,
+//        parser: (String) -> T?
     ) : PropProvider<T> {
         return object : PropProvider<T> {
             override fun provideDelegate(
@@ -116,9 +143,10 @@ abstract class LWElement(
                     defaultValue = defaultValue,
                     key = key ?: prop.name,
                     displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
-                    parser = parser
+                    type = type,
+//                    parser = parser
                 )
-                properties += liveProp
+                propertyList += liveProp
                 return liveProp
             }
         }
@@ -158,28 +186,50 @@ inline fun <reified T> defaultValueForType() : T {
     }
 }
 
-inline fun <reified T> parserForType() : (String)->T? {
+//inline fun <reified T> parserForType() : (String)->T? {
+//    when(T::class) {
+//        String::class -> return {it as? T}
+//        Int::class -> return {it.toIntOrNull() as? T}
+//        Float::class -> return {it.toFloatOrNull() as? T}
+//        Double::class -> return {it.toDoubleOrNull() as? T}
+//        Long::class -> return {it.toLongOrNull() as? T}
+//        Char::class -> return {it.firstOrNull() as? T}
+//        Boolean::class -> return {
+//            when(it.lowercase().trim()) {
+//                "true" -> true
+//                "false" -> false
+//                else -> null
+//            } as? T
+//        }
+//        Vec2::class -> return {it.toVec2OrNull() as? T}
+//        Vec3::class -> return {it.toVec3OrNull() as? T}
+//        Vec4::class -> return {it.toVec4OrNull() as? T}
+//        Time::class -> return {it.toTimeOrNull() as? T}
+//        Seconds::class -> return {it.toTimeOrNull()?.toSeconds() as? T}
+//        Millis::class -> return {it.toTimeOrNull()?.toMillis() as? T}
+//        Nanos::class -> return {it.toTimeOrNull()?.toNanos() as? T}
+//        else -> throw IllegalArgumentException("Unsupported type")
+//    }
+//}
+
+inline fun <reified T> inferPropertyType() : PropertyType {
     when(T::class) {
-        String::class -> return {it as? T}
-        Int::class -> return {it.toIntOrNull() as? T}
-        Float::class -> return {it.toFloatOrNull() as? T}
-        Double::class -> return {it.toDoubleOrNull() as? T}
-        Long::class -> return {it.toLongOrNull() as? T}
-        Char::class -> return {it.firstOrNull() as? T}
-        Boolean::class -> return {
-            when(it.lowercase().trim()) {
-                "true" -> true
-                "false" -> false
-                else -> null
-            } as? T
-        }
-        Vec2::class -> return {it.toVec2OrNull() as? T}
-        Vec3::class -> return {it.toVec3OrNull() as? T}
-        Vec4::class -> return {it.toVec4OrNull() as? T}
-        Time::class -> return {it.toTimeOrNull() as? T}
-        Seconds::class -> return {it.toTimeOrNull()?.toSeconds() as? T}
-        Millis::class -> return {it.toTimeOrNull()?.toMillis() as? T}
-        Nanos::class -> return {it.toTimeOrNull()?.toNanos() as? T}
+        String::class -> return PropertyType.TypedExpression(PropertyDataType.String)
+        Int::class -> return PropertyType.TypedExpression(PropertyDataType.Integer)
+        Float::class -> return PropertyType.TypedExpression(PropertyDataType.Number)
+        Double::class -> return PropertyType.TypedExpression(PropertyDataType.Number)
+        Long::class -> return PropertyType.TypedExpression(PropertyDataType.Integer)
+        Char::class -> return PropertyType.TypedExpression(PropertyDataType.Char)
+        Boolean::class -> return PropertyType.TypedExpression(PropertyDataType.Boolean)
+        Vec2::class -> return PropertyType.TypedExpression(PropertyDataType.Vec2)
+        Vec3::class -> return PropertyType.TypedExpression(PropertyDataType.Vec3)
+        Vec4::class -> return PropertyType.TypedExpression(PropertyDataType.Vec4)
+        Time::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
+        Seconds::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
+        Millis::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
+        Nanos::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
+        LWDimension::class, LWDimension.Millimeters::class, LWDimension.Points::class ->
+            return PropertyType.TypedExpression(PropertyDataType.Dimension)
         else -> throw IllegalArgumentException("Unsupported type")
     }
 }
