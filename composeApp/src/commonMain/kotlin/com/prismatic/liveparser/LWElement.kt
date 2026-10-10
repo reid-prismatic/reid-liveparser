@@ -22,7 +22,43 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
     val inst = match.makeInstance()
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
     val propLines = entityLines.drop(bodyLines.size)
-
+    val props = mutableMapOf<String,MutableList<String>>()
+    propLines.forEach { line ->
+        val key = line.substringBefore(':', "").trim().removePrefix("- ").trim()
+        val targetProperty = match.properties[key]
+        if( targetProperty != null ) {
+            val value = line.substringAfter(':', "").trim()
+            if(targetProperty.accumulateInstances) {
+                props.getOrPut(key,{mutableListOf()}).add(value)
+            } else {
+                props.getOrPut(key,{mutableListOf()}).apply {
+                    clear()
+                    add(value)
+                }
+            }
+        }
+    }
+//    inst.propertyList.forEach { prop -> prop.update(PropertyExpression.of(prop.defaultValue))}
+    for ((k, v) in props) {
+        val prop = inst.properties[k] ?: continue
+        if( v.size == 1 ) {
+            val parsed = runCatching { parsePropertyString(v.first(),prop.type) }.getOrNull() ?: continue
+            prop.update(parsed)
+        } else if( v.size > 1 ) {
+            val parsed = v.asSequence().map { parsePropertyString(it,prop.type) }.reduce { a, b ->
+                when {
+                    a !is PropertyExpression -> b
+                    b !is PropertyExpression -> a
+                    else -> PropertyExpression.Binary(PropertyExpression.BinaryOperator.ADD,a,b)
+                }
+            } ?: continue
+            prop.update(parsed)
+        }
+    }
+    with(inst) {
+        scope.parse()
+    }
+    return inst
 }
 
 class TextElement() : ConcreteElement<TextElement>(
@@ -34,11 +70,14 @@ class TextElement() : ConcreteElement<TextElement>(
     val weight by prop(FontWeight.Bold)
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)
-    val text by prop("")
-    val position by prop(Vec2.ZERO)
+//    val text by prop("")
+    var text : String = ""
+    val position by prop(Vec2.ZERO) {
+        accumulateMultipleInstances()
+    }
 
-    override fun LWEntityParseScope.parse(): TextElement {
-        TODO("Not yet implemented")
+    override fun LWEntityParseScope.parse() {
+        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
     }
 
     override fun makeInstance(): TextElement = TextElement()
@@ -53,7 +92,7 @@ abstract class ConcreteElement<T: ConcreteElement<T>>(
 
 class ErrorElement : LWElement<ErrorElement>() {
     override fun LWEntityParseScope.recognize(): Boolean = false
-    override fun LWEntityParseScope.parse(): ErrorElement = this@ErrorElement
+    override fun LWEntityParseScope.parse() {}
     override fun makeInstance(): ErrorElement = ErrorElement()
 }
 
@@ -69,7 +108,7 @@ fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
 abstract class LWElement<T: LWElement<T>> {
 
     abstract fun LWEntityParseScope.recognize() : Boolean
-    abstract fun LWEntityParseScope.parse() : T
+    abstract fun LWEntityParseScope.parse()
     abstract fun makeInstance() : T
 
     var propertyList : List<Prop<*>> = emptyList()
@@ -80,28 +119,50 @@ abstract class LWElement<T: LWElement<T>> {
     interface Prop<T> {
         val key: String
         val displayName: String
-        fun update(value: String)
+        val type: PropertyType
+        val accumulateInstances: Boolean
+        fun update(value: ParsedProperty)
+        val parsedProperty: ParsedProperty
     }
 
     interface PropMember<T> {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T>
     }
 
+    interface CompoundPropMember {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): Unit
+    }
+
+
+
     private inner class PropImpl<T>(
         val defaultValue: T,
         override val key: String,
         override val displayName: String,
-        val type: PropertyType,
+        override val type: PropertyType,
+        override val accumulateInstances: Boolean,
 //        val parser: (String) -> T?
     ) : Prop<T>, PropMember<T> {
-        var propValue: T = defaultValue
-        override fun update(value: String) {
-            propValue = parser(value) ?: defaultValue
+        var propValue : ParsedProperty = PropertyExpression.of(defaultValue)
+        override val parsedProperty: ParsedProperty
+            get() = propValue
+//        var propValue: T = defaultValue
+        override fun update(value: ParsedProperty) {
+            propValue = value
+//            propValue = parser(value) ?: defaultValue
         }
         override fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T> = this@PropImpl
     }
     interface PropProvider<T> {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): PropMember<T>
+    }
+
+    interface CompoundPropProvider {
+        operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): CompoundPropMember
+    }
+
+    interface PropertyDefScope {
+        fun accumulateMultipleInstances()
     }
 
 //    inline fun <reified T> prop(
@@ -114,42 +175,71 @@ abstract class LWElement<T: LWElement<T>> {
 //        return propProvider(defaultValue?.invoke() ?: defaultValueForType(), key, displayName, type ?: inferPropertyType<T>(), parser ?: parserForType() )
 //    }
 
-    fun prop(defaultValue: Int): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
-    fun prop(defaultValue: Float): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
-    fun prop(defaultValue: Double): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
-    fun prop(defaultValue: Long): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number))
-    fun prop(defaultValue: String): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String))
-    fun prop(defaultValue: Vec2): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2))
-    fun prop(defaultValue: Vec3): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3))
-    fun prop(defaultValue: Vec4): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4))
-    fun prop(defaultValue: LWDimension): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension))
-    fun prop(defaultValue: FontWeight): PropProvider<FontWeight> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension))
-    fun prop(defaultValue: FontStyle): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"))
-    fun prop(vararg components: Prop<*>) : PropProvider<Prop<*>> = TODO()
+    fun prop(defaultValue: Int, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Float, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Double, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Long, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: String, def:(PropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
+    fun prop(defaultValue: Vec2, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
+    fun prop(defaultValue: Vec3, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
+    fun prop(defaultValue: Vec4, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
+    fun prop(defaultValue: LWDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
+    fun prop(defaultValue: FontWeight, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
+        propProvider(defaultValue, type = PropertyType.Alternate(
+            PropertyType.UnquotedStringEnum("Thin","ExtraLight","Light","Normal","Medium","SemiBold","Bold","ExtraBold","Black"),
+            PropertyType.TypedExpression(PropertyDataType.Integer)
+        ), def=def)
+    fun prop(defaultValue: FontStyle, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
+    fun prop(vararg components: Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(type = PropertyType.Compound(components.map { it.type }))
+
+    fun compoundPropProvider(
+        key: String? = null,
+        displayName: String? = null,
+        type: PropertyType,
+//        parser: (String) -> T?
+    ) : CompoundPropProvider {
+        return object : CompoundPropProvider {
+            override fun provideDelegate(
+                thisRef: Any?,
+                prop: KProperty<*>
+            ): CompoundPropMember {
+//                propertyList += liveProp
+                return object : CompoundPropMember {
+                    override fun getValue(thisRef: Any?, property: KProperty<*>) {
+
+                    }
+                }
+            }
+        }
+    }
 
     fun <T> propProvider(
         defaultValue: T,
         key: String? = null,
         displayName: String? = null,
         type: PropertyType,
+        def:(PropertyDefScope.()->Unit)?
 //        parser: (String) -> T?
     ) : PropProvider<T> {
-        return object : PropProvider<T> {
+        return object : PropProvider<T>, PropertyDefScope {
+            var multiInstance = false
+            override fun accumulateMultipleInstances() {multiInstance = true}
             override fun provideDelegate(
                 thisRef: Any?,
                 prop: KProperty<*>
-            ): Prop<T> {
-                val liveProp : Prop<T> = PropImpl(
+            ): PropMember<T> {
+                val liveProp = PropImpl(
                     defaultValue = defaultValue,
                     key = key ?: prop.name,
                     displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
                     type = type,
+                    accumulateInstances = multiInstance
 //                    parser = parser
                 )
                 propertyList += liveProp
                 return liveProp
             }
-        }
+        }.also{def?.invoke(it)}
     }
 }
 

@@ -8,6 +8,14 @@
 
 package com.prismatic.liveparser
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import org.prismatic.opus.math.Vec2
+import org.prismatic.opus.math.Vec3
+import org.prismatic.opus.math.Vec4
+import org.prismatic.opus.time.Time
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -100,7 +108,8 @@ class PropertyExpressionParseException(
 ) : IllegalArgumentException("$reason (at offset ${range.first})")
 
 /**
- * What a property string parses to: a single [PropertyExpression], or for a compound property a [Compound] of them.
+ * What a property string parses to: a single [PropertyExpression], for a compound property a [Compound] of its
+ * parts, and for a property with alternatives the [Alternate] that the string turned out to be.
  */
 sealed interface ParsedProperty {
 
@@ -109,6 +118,14 @@ sealed interface ParsedProperty {
      * component that the string left out is `null`.
      */
     data class Compound(val components: List<ParsedProperty?>) : ParsedProperty
+
+    /**
+     * The value of a property that can be written in several ways: the string was read as the component at
+     * [index] among the alternatives of its type, and [value] is what it is when read that way. The value alone
+     * need not show which one it was: the option `Bold` and the expression `"Bold"` are the same string literal.
+     * It is `null` if that component is one that may be left out, and the string left it out.
+     */
+    data class Alternate(val index: Int, val value: ParsedProperty?) : ParsedProperty
 }
 
 /**
@@ -305,6 +322,33 @@ sealed class PropertyExpression : ParsedProperty {
         AND("&&"),
         OR("||"),
     }
+
+    companion object {
+        fun of(value: Any?): PropertyExpression {
+            return when (value) {
+                is Int -> IntegerLiteral(value.toLong())
+                is UInt -> IntegerLiteral(value.toLong())
+                is Short -> IntegerLiteral(value.toLong())
+                is UShort -> IntegerLiteral(value.toLong())
+                is ULong -> IntegerLiteral(value.toLong())
+                is Long -> IntegerLiteral(value)
+                is String -> StringLiteral(value)
+                is Boolean -> BooleanLiteral(value)
+                is Color -> ColorLiteral(value.toArgb().toUInt())
+                is Time -> TimeLiteral(value.toSeconds().asDouble(),DurationUnit.SECONDS)
+                is Float -> NumberLiteral(value.toDouble())
+                is Double -> NumberLiteral(value)
+                is Vec2 -> Vector(listOf(of(value.x), of(value.y)))
+                is Vec3 -> Vector(listOf(of(value.x), of(value.y), of(value.z)))
+                is Vec4 -> Vector(listOf(of(value.x), of(value.y), of(value.z), of(value.w)))
+                is LWDimension.Points -> DimensionLiteral(value.value.toDouble(), DimensionUnit.POINT)
+                is LWDimension.Millimeters -> DimensionLiteral(value.value, DimensionUnit.MILLIMETER)
+                is FontWeight -> IntegerLiteral(value.weight.toLong())
+                is FontStyle -> StringLiteral(value.value.toString())
+                else -> throw IllegalArgumentException("Cannot convert ${value?.let { it::class.simpleName}} to PropertyExpression")
+            }
+        }
+    }
 }
 
 /**
@@ -315,9 +359,9 @@ sealed class PropertyExpression : ParsedProperty {
  * brackets, whitespace then separates where it would otherwise let two things join: `name (x)` is a name followed
  * by another component rather than a call, and so is the sign in `a -b`, while `a - b` and `a-b` stay subtractions.
  *
- * An instance is good for one of [parse], [parseLeading], [parseOperand] and [parseRangeOperator]. Parsers that
- * read the same [input] up to the same [end] can share [groupEnds], so that what one of them has found out about
- * the brackets ahead need not be found out again by the next.
+ * An instance is good for one of [parse], [parseLeading], [parseOperand], [parseLeadingOperand] and
+ * [parseRangeOperator]. Parsers that read the same [input] up to the same [end] can share [groupEnds], so that
+ * what one of them has found out about the brackets ahead need not be found out again by the next.
  */
 internal class PropertyExpressionParser(
     private val input: String,
@@ -712,8 +756,16 @@ internal class PropertyExpressionParser(
     private class Tokens(private val lexer: Lexer) {
         private val read = ArrayList<Token>()
 
+        /** Where the text stops being made of tokens, if the tokens read so far reach that place; -1 if not. */
+        var unreadableFrom = -1
+            private set
+
         operator fun get(index: Int): Token {
-            while (read.size <= index) read += lexer.next()
+            while (read.size <= index) {
+                val token = lexer.next()
+                if (token.kind == Kind.ERROR) unreadableFrom = token.start
+                read += token
+            }
             return read[index]
         }
 
@@ -778,6 +830,12 @@ internal class PropertyExpressionParser(
     }
 
     /**
+     * Parses the longest operand, as [parseOperand] understands it, that the text starts with and leaves what
+     * follows it alone; [consumedEnd] then tells where the operand ended.
+     */
+    fun parseLeadingOperand(): PropertyExpression = parseBinary().also { checkDepth(it) }
+
+    /**
      * Parses the `..` or `..easing..` that the text starts with and returns the easing, if it has one;
      * [consumedEnd] then tells where the operator ended.
      */
@@ -825,6 +883,12 @@ internal class PropertyExpressionParser(
 
     /** Why the text that follows what has been consumed cannot be read, if that is the case. */
     val unreadableNext: PropertyExpressionParseException? get() = current.error
+
+    /**
+     * Where the text stops being readable, if this parser has looked that far, and -1 if it has not. Nothing that
+     * starts before that place can be read beyond it.
+     */
+    val unreadableFrom: Int get() = tokens.unreadableFrom
 
     /** Whether the text starts with something that an expression can start with. */
     fun startsExpression(): Boolean = when (tokens[0].kind) {
@@ -1227,4 +1291,5 @@ val DurationUnit.abbr: String get() = when (this) {
     DurationUnit.MINUTES -> "m"
     DurationUnit.HOURS -> "h"
     DurationUnit.DAYS -> "d"
+    else -> throw IllegalStateException()
 }

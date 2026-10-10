@@ -1,14 +1,7 @@
 package com.prismatic.liveparser
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -17,16 +10,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.structuralEqualityPolicy
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -46,14 +30,7 @@ import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
 import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
-import org.prismatic.opus.time.Millis
-import org.prismatic.opus.time.Nanos
-import org.prismatic.opus.time.Seconds
 import org.prismatic.opus.time.Time
-import org.prismatic.opus.time.millis
-import org.prismatic.opus.time.nanos
-import org.prismatic.opus.time.seconds
-import kotlin.reflect.KProperty
 
 interface ScribeEntity {
     val type: LineType
@@ -63,6 +40,8 @@ interface ScribeEntity {
         }
     }
 }
+
+data class LWElementEntity(val element: LWElement<*>, override val type: LineType) : ScribeEntity
 
 @Immutable
 interface MarkdownProperties : ScribeEntity{
@@ -414,7 +393,7 @@ fun ScribeDocTest() {
             getLineType(line, context)
         },
         parseEntity = {
-            parseElement(context)
+            parseElement(context).let { LWElementEntity(it,context) }
 //            parseEntity(context)
         }
     )
@@ -457,7 +436,19 @@ fun ScribeDocTest() {
         LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
             items(liveParse.entities, {it.id}) { entity ->
                 val selected = selectedLine in entity.startLine ..entity.endLine
-                Text("${entity.id}: ${entity.entity.type}", Modifier.background(if (selected) Color.Yellow else Color.White))
+                val elementEntity = entity.entity as? LWElementEntity
+                if(elementEntity != null) {
+                    Text(
+                        "${entity.id}: ${elementEntity.element::class.simpleName}(${elementEntity.element.properties.map { (k,v) -> "$k: ${v.parsedProperty}" }})",
+                        Modifier.background(if (selected) Color.Yellow else Color.White)
+                    )
+
+                } else {
+                    Text(
+                        "${entity.id}: ${entity.entity.type}",
+                        Modifier.background(if (selected) Color.Yellow else Color.White)
+                    )
+                }
             }
         }
     }

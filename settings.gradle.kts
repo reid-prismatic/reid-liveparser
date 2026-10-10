@@ -25,6 +25,7 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        maven("https://jogamp.org/deployment/maven") // For JOGL
         maven {
             url = uri("https://maven.pkg.github.com/theprismaticcompany/opus-math")
             credentials {
