@@ -72,7 +72,7 @@ private data class LiveParseLineImpl<CONTEXT:LiveParseLineContext>(
 ) : LiveParseLine<CONTEXT>
 
 private inline infix fun <T:Comparable<T>> ClosedRange<T>.intersects(other: ClosedRange<T>) : Boolean =
-    this.start <= other.endInclusive && other.start >= this.endInclusive
+    this.start <= other.endInclusive && this.endInclusive >= other.start
 
 private inline infix fun <T:Comparable<T>> ClosedRange<T>.notIntersects(other: ClosedRange<T>) : Boolean =
     !(this intersects other)

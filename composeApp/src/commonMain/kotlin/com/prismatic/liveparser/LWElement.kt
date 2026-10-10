@@ -1,5 +1,9 @@
 package com.prismatic.liveparser
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import org.prismatic.opus.math.Vec2
@@ -15,11 +19,12 @@ import org.prismatic.opus.time.nanos
 import org.prismatic.opus.time.seconds
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElement<*> {
+fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
     val scope = LWEntityParseScope(this)
     val matches = elements.filter { with(it){scope.recognize()} }
-    val match = matches.singleOrNull() ?: return ErrorElement()
-    val inst = match.makeInstance()
+    val match = matches.singleOrNull() ?: return  LWElementEntity(ErrorElement(),firstLineType)
+    val lwee = (existingEntity as? LWElementEntity) ?: LWElementEntity(match.makeInstance(),firstLineType)
+    val inst: LWElement<*> = lwee.element
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
     val propLines = entityLines.drop(bodyLines.size)
     val props = mutableMapOf<String,MutableList<String>>()
@@ -45,7 +50,7 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
             val parsed = runCatching { parsePropertyString(v.first(),prop.type) }.getOrNull() ?: continue
             prop.update(parsed)
         } else if( v.size > 1 ) {
-            val parsed = v.asSequence().map { parsePropertyString(it,prop.type) }.reduce { a, b ->
+            val parsed = v.asSequence().mapNotNull { runCatching {  parsePropertyString(it,prop.type) }.getOrNull() }.reduce { a, b ->
                 when {
                     a !is PropertyExpression -> b
                     b !is PropertyExpression -> a
@@ -58,7 +63,7 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
     with(inst) {
         scope.parse()
     }
-    return inst
+    return lwee
 }
 
 class TextElement() : ConcreteElement<TextElement>(
@@ -71,7 +76,7 @@ class TextElement() : ConcreteElement<TextElement>(
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)
 //    val text by prop("")
-    var text : String = ""
+    var text : String by mutableStateOf("")
     val position by prop(Vec2.ZERO) {
         accumulateMultipleInstances()
     }
@@ -143,7 +148,7 @@ abstract class LWElement<T: LWElement<T>> {
         override val accumulateInstances: Boolean,
 //        val parser: (String) -> T?
     ) : Prop<T>, PropMember<T> {
-        var propValue : ParsedProperty = PropertyExpression.of(defaultValue)
+        var propValue : ParsedProperty by mutableStateOf(PropertyExpression.of(defaultValue))
         override val parsedProperty: ParsedProperty
             get() = propValue
 //        var propValue: T = defaultValue

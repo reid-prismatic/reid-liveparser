@@ -393,7 +393,8 @@ fun ScribeDocTest() {
             getLineType(line, context)
         },
         parseEntity = {
-            parseElement(context).let { LWElementEntity(it,context) }
+            println("ParseElement:${this.entityId}")
+            parseElement(context)
 //            parseEntity(context)
         }
     )
