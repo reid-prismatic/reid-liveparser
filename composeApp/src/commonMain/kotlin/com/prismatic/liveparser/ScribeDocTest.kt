@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ import org.prismatic.opus.math.Vec4
 import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
+import org.prismatic.opus.time.seconds
 
 interface ScribeEntity {
     val type: LineType
@@ -380,6 +382,7 @@ fun LWEntityParseScope.codeError(
 
 @Composable
 fun ScribeDocTest() {
+    var t by remember { mutableStateOf(0.5f) }
     val textFieldState = remember { TextFieldState() }
     val selectedLine by derivedStateOf(structuralEqualityPolicy()) {
         textFieldState.text.countInSubsequence(0,textFieldState.selection.start) {it=='\n'}
@@ -414,46 +417,80 @@ fun ScribeDocTest() {
         listState.scrollToItem(topLine)
     }
 
-    Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(3f).fillMaxHeight()) {
-            LazyColumn(Modifier.fillMaxSize().offset { IntOffset(0, -scrollDiff) }, state = listState) {
-                items(liveParse.lines, {it.entityId}) { line ->
-                    LineDetail(line)
+    Column(Modifier.fillMaxSize()){
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+            Box(Modifier.weight(3f).fillMaxHeight()) {
+                LazyColumn(Modifier.fillMaxSize().offset { IntOffset(0, -scrollDiff) }, state = listState) {
+                    items(liveParse.lines, {it.entityId}) { line ->
+                        LineDetail(line)
+                    }
                 }
+                BasicTextField(
+                    textFieldState,
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = 3.dp)
+                        .drawLineNumbers(textLayoutResult, 30.dp, textFieldScrollState.value)
+                        .padding(start = 45.dp)
+                        .verticalScroll(textFieldScrollState),
+                    onTextLayout = {
+                        textLayoutResult = it()
+                    }
+                )
             }
-            BasicTextField(
-                textFieldState,
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = 3.dp)
-                    .drawLineNumbers(textLayoutResult, 30.dp, textFieldScrollState.value)
-                    .padding(start = 45.dp)
-                    .verticalScroll(textFieldScrollState),
-                onTextLayout = {
-                    textLayoutResult = it()
-                }
-            )
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
-            items(liveParse.entities, {it.id}) { entity ->
-                val selected = selectedLine in entity.startLine ..entity.endLine
-                val elementEntity = entity.entity as? LWElementEntity
-                if(elementEntity != null) {
-                    Text(
-                        "${entity.id}: ${elementEntity.element::class.simpleName}(${elementEntity.element.properties.map { (k,v) -> "$k: ${v.parsedProperty}" }})",
-                        Modifier.background(if (selected) Color.Yellow else Color.White)
-                    )
+            LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
+                items(liveParse.entities, {it.id}) { entity ->
+                    val selected = selectedLine in entity.startLine ..entity.endLine
+                    val elementEntity = entity.entity as? LWElementEntity
+                    if(elementEntity != null) {
+                        val propExprContext = remember(t) { object: PropertyExpressionContext{
+                            override val duration: Time get() = 10.seconds
+                            override val progress: Float = t
 
-                } else {
-                    Text(
-                        "${entity.id}: ${entity.entity.type}",
-                        Modifier.background(if (selected) Color.Yellow else Color.White)
-                    )
+                            override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
+                                "foo" -> PropertyExpression.of(123)
+                                "bar" -> PropertyExpression.of("Test")
+                                "cts" -> PropertyExpression.of(t)
+                                else -> null
+                            }
+
+                            override fun callFunction(
+                                symbol: String,
+                                args: List<PropertyExpression>
+                            ): PropertyExpression? {
+                                return null
+                            }
+                        } }
+                        Text(
+                            "${entity.id}: ${elementEntity.element::class.simpleName}(${elementEntity.element.properties.map { (k,v) -> "$k: ${v.parsedProperty.evaluate(propExprContext).toFlatString()}" }})",
+                            Modifier.background(if (selected) Color.Yellow else Color.White)
+                        )
+
+                    } else {
+                        Text(
+                            "${entity.id}: ${entity.entity.type}",
+                            Modifier.background(if (selected) Color.Yellow else Color.White)
+                        )
+                    }
                 }
             }
         }
+        Slider(t, {t=it}, Modifier.fillMaxWidth())
     }
 }
+
+/*
+
+Test
+- position: (10,3+5) ..accel.. (35, 100) @ 30s
+- position: (5,10009) + (5,80)
+
+Blah
+More text
+And stuff
+- typeface: "foo" + foo
+- position: (10,30)
+ */
 
 @Composable
 fun LineDetail(line: LiveParseLine<LineType>) {
