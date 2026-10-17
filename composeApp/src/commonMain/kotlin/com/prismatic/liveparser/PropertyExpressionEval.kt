@@ -154,12 +154,14 @@ fun ParsedProperty.evaluate(context: PropertyExpressionContext): ParsedProperty 
     is PropertyExpression -> evaluate(context)
     is ParsedProperty.Alternate -> ParsedProperty.Alternate(index, this.value?.evaluate(context))
     is ParsedProperty.Compound -> ParsedProperty.Compound(components.map { it?.evaluate(context) })
+    is ParsedProperty.Error -> this
 }
 
 fun ParsedProperty.toFlatString() : String = when (this) {
     is PropertyExpression -> this.toFlatString()
     is ParsedProperty.Alternate -> value?.toFlatString() ?: ""
     is ParsedProperty.Compound -> components.joinToString(", ") { it?.toFlatString() ?: "" }
+    is ParsedProperty.Error -> error
 }
 
 fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyExpression {

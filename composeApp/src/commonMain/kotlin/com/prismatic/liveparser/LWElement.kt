@@ -44,11 +44,12 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
             }
         }
     }
-//    inst.propertyList.forEach { prop -> prop.update(PropertyExpression.of(prop.defaultValue))}
     for ((k, v) in props) {
         val prop = inst.properties[k] ?: continue
         if( v.size == 1 ) {
-            val parsed = runCatching { parsePropertyString(v.first(),prop.type) }.getOrNull() ?: continue
+            val parsed = runCatching { parsePropertyString(v.first(),prop.type) }
+                .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
+                .getOrNull() ?: PropertyExpression.of("null")
             prop.update(parsed)
         } else if( v.size > 1 ) {
             val parsed = v.asSequence().mapNotNull { runCatching {  parsePropertyString(it,prop.type) }.getOrNull() }.reduce { a, b ->
