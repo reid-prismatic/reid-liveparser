@@ -1,12 +1,21 @@
-package com.prismatic.liveparser
+package com.prismatic.liveparser.weave.grammar
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.prismatic.liveparser.LWDimension
+import com.prismatic.liveparser.LWEntityParseScope
+import com.prismatic.liveparser.LiveParseEntityScope
+import com.prismatic.liveparser.ParsedProperty
+import com.prismatic.liveparser.PropertyDataType
+import com.prismatic.liveparser.PropertyExpression
+import com.prismatic.liveparser.PropertyType
+import com.prismatic.liveparser.parsePropertyString
+import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
+import com.prismatic.liveparser.weave.elements.ErrorElement
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -18,13 +27,20 @@ import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.millis
 import org.prismatic.opus.time.nanos
 import org.prismatic.opus.time.seconds
+import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
+fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseElement(firstLineType: LineType): com.prismatic.liveparser.LWElementEntity {
     val scope = LWEntityParseScope(this)
-    val matches = elements.filter { with(it){scope.recognize()} }
-    val match = matches.singleOrNull() ?: return  LWElementEntity(ErrorElement(),firstLineType)
-    val lwee = (existingEntity as? LWElementEntity) ?: LWElementEntity(match.makeInstance(),firstLineType)
+    val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
+    val match = matches.singleOrNull() ?: return _root_ide_package_.com.prismatic.liveparser.LWElementEntity(
+        ErrorElement(),
+        firstLineType
+    )
+    val lwee = (existingEntity as? com.prismatic.liveparser.LWElementEntity) ?: _root_ide_package_.com.prismatic.liveparser.LWElementEntity(
+        match.makeInstance(),
+        firstLineType
+    )
     val inst: LWElement<*> = lwee.element
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
     val propLines = entityLines.drop(bodyLines.size)
@@ -68,131 +84,6 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
     return lwee
 }
 
-class TargetElement() : DefinitionElement<TargetElement>(
-    namespace = "target",
-    shorthandRecognizer = {false}
-) {
-    var targetName by mutableStateOf("")
-    val ratio by prop(16 to 9)
-    override fun LWEntityParseScope.parse() {
-        targetName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':',"").trim()
-    }
-    override fun makeInstance(): TargetElement = TargetElement()
-    override fun debugString(): String = "target:$targetName"
-}
-
-class StyleElement() : DefinitionElement<StyleElement>(
-    namespace = "style",
-    shorthandRecognizer = {firstLine.isStyleEntityStart},
-) {
-    var styleName by mutableStateOf("")
-    override fun LWEntityParseScope.parse() {
-        styleName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':').trim()
-    }
-    override fun makeInstance(): StyleElement = StyleElement()
-    override fun debugString(): String = "style:$styleName"
-}
-
-class TextElement() : ConcreteElement<TextElement>(
-    namespace = "text",
-    shorthandRecognizer = { firstLine.isTextEntityStart }
-) {
-    val fontSize by prop(12.pt)
-    val typeface by prop("")
-    val weight by prop(FontWeight.Bold)
-    val fontStyle by prop(FontStyle.Normal)
-    val font by prop(fontSize, typeface, weight, fontStyle)
-//    val text by prop("")
-    var text : String by mutableStateOf("")
-    val position by prop(Vec2.ZERO)
-    val duration by prop(MediaTime.Unspecified)
-    val color by prop(Color.Black)
-    val offset by prop(Vec2.ZERO) {
-        accumulateMultipleInstances()
-    }
-
-    override fun LWEntityParseScope.parse() {
-        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
-    }
-
-    override fun makeInstance(): TextElement = TextElement()
-    override fun debugString(): String = "text:${text.replace("\n", "\\n")}"
-}
-
-class VoiceoverElement() : ConcreteElement<VoiceoverElement>(
-    namespace = "voiceover",
-    shorthandRecognizer = { firstLine.isVoiceoverEntityStart }
-) {
-    var text : String by mutableStateOf("")
-    val voice by prop("")
-    val volume by prop(0)
-    val duration by prop(MediaTime.Unspecified)
-    override fun LWEntityParseScope.parse() {
-        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
-    }
-    override fun debugString(): String = "voiceover:${text.replace("\n", "\\n")}"
-
-    override fun makeInstance(): VoiceoverElement = VoiceoverElement()
-}
-
-class MediaElement() : ConcreteElement<MediaElement>(
-    namespace = "media",
-    shorthandRecognizer = { firstLine.isConcreteEntityStart && ":" !in firstLine.body && "." in firstLine.body }
-) {
-    var filename : String by mutableStateOf("")
-    val duration by prop(MediaTime.Unspecified)
-    override fun LWEntityParseScope.parse() {
-        filename = firstLine.trimmedBody.removeSurrounding("[","]").trim()
-    }
-    override fun debugString(): String = "media:$filename"
-
-    override fun makeInstance(): MediaElement = MediaElement()
-}
-
-abstract class ConcreteElement<T: ConcreteElement<T>>(
-    val namespace: String,
-    val shorthandRecognizer: LWEntityParseScope.() -> Boolean = { false }
-) : LWElement<T>() {
-    override fun LWEntityParseScope.recognize(): Boolean = isConcreteEntity(namespace) || shorthandRecognizer()
-}
-
-abstract class DefinitionElement<T: DefinitionElement<T>>(
-    val namespace: String,
-    val shorthandRecognizer: LWEntityParseScope.() -> Boolean = { false }
-) : LWElement<T>() {
-    override fun LWEntityParseScope.recognize(): Boolean = isDefinitionEntity(namespace) || shorthandRecognizer()
-}
-
-class SegmentBreakElement() : LWElement<SegmentBreakElement>() {
-    var transition by mutableStateOf<ParsedProperty?>(null)
-    override fun LWEntityParseScope.recognize(): Boolean = firstLine.isSegmentBreak
-    override fun makeInstance(): SegmentBreakElement = SegmentBreakElement()
-    override fun LWEntityParseScope.parse() {
-        val argString = firstLine.trimmedBody.trimStart('-').trimStart()
-        transition = runCatching {  parsePropertyString(argString, PropertyType.Alternate(
-            PropertyType.Expression,
-            PropertyType.UnquotedStringLiteral,
-            ))}.getOrNull()
-    }
-    override fun debugString(): String = "segment(transition=${transition?.evaluate(PropertyExpressionContext.Empty)?.toFlatString()})"
-}
-
-class ErrorElement : LWElement<ErrorElement>() {
-    override fun LWEntityParseScope.recognize(): Boolean = false
-    override fun LWEntityParseScope.parse() {}
-    override fun makeInstance(): ErrorElement = ErrorElement()
-    override fun debugString(): String = "error"
-}
-
-val elements = listOf<LWElement<*>>(
-    TextElement(),
-    VoiceoverElement(),
-    MediaElement(),
-    TargetElement(),
-    StyleElement(),
-    SegmentBreakElement()
-)
-
 fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
     firstLine.firstChar == '[' && firstLine.lastChar == ']'
             && (':' in firstLine.trimmedBody || '.' !in firstLine.trimmedBody)
@@ -233,8 +124,6 @@ abstract class LWElement<T: LWElement<T>> {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): Unit
     }
 
-
-
     private inner class PropImpl<T>(
         val defaultValue: T,
         override val key: String,
@@ -264,16 +153,6 @@ abstract class LWElement<T: LWElement<T>> {
     interface PropertyDefScope {
         fun accumulateMultipleInstances()
     }
-
-//    inline fun <reified T> prop(
-//        noinline defaultValue: (()->T)? = null,
-//        key: String? = null,
-//        displayName: String? = null,
-//        type: PropertyType? = null,
-//        noinline parser: ((String) -> T?)? = null
-//    ) : PropProvider<T> {
-//        return propProvider(defaultValue?.invoke() ?: defaultValueForType(), key, displayName, type ?: inferPropertyType<T>(), parser ?: parserForType() )
-//    }
 
     fun prop(defaultValue: Int, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
     fun prop(defaultValue: Float, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
@@ -378,32 +257,6 @@ inline fun <reified T> defaultValueForType() : T {
         else -> throw IllegalArgumentException("Unsupported type")
     }
 }
-
-//inline fun <reified T> parserForType() : (String)->T? {
-//    when(T::class) {
-//        String::class -> return {it as? T}
-//        Int::class -> return {it.toIntOrNull() as? T}
-//        Float::class -> return {it.toFloatOrNull() as? T}
-//        Double::class -> return {it.toDoubleOrNull() as? T}
-//        Long::class -> return {it.toLongOrNull() as? T}
-//        Char::class -> return {it.firstOrNull() as? T}
-//        Boolean::class -> return {
-//            when(it.lowercase().trim()) {
-//                "true" -> true
-//                "false" -> false
-//                else -> null
-//            } as? T
-//        }
-//        Vec2::class -> return {it.toVec2OrNull() as? T}
-//        Vec3::class -> return {it.toVec3OrNull() as? T}
-//        Vec4::class -> return {it.toVec4OrNull() as? T}
-//        Time::class -> return {it.toTimeOrNull() as? T}
-//        Seconds::class -> return {it.toTimeOrNull()?.toSeconds() as? T}
-//        Millis::class -> return {it.toTimeOrNull()?.toMillis() as? T}
-//        Nanos::class -> return {it.toTimeOrNull()?.toNanos() as? T}
-//        else -> throw IllegalArgumentException("Unsupported type")
-//    }
-//}
 
 inline fun <reified T> inferPropertyType() : PropertyType {
     when(T::class) {

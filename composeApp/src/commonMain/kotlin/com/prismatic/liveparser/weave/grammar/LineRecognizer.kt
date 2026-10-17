@@ -1,4 +1,6 @@
-package com.prismatic.liveparser
+package com.prismatic.liveparser.weave.grammar
+
+import com.prismatic.liveparser.LiveParseLineContext
 
 enum class LineType(override val isBlockStart: Boolean = false) : LiveParseLineContext {
     None,

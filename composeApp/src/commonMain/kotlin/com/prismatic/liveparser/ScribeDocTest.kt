@@ -27,6 +27,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.prismatic.liveparser.weave.grammar.LWElement
+import com.prismatic.liveparser.weave.grammar.LineType
+import com.prismatic.liveparser.weave.grammar.decomposeLine
+import com.prismatic.liveparser.weave.grammar.getLineType
+import com.prismatic.liveparser.weave.grammar.isBlankLine
+import com.prismatic.liveparser.weave.grammar.isPropertyLine
+import com.prismatic.liveparser.weave.grammar.parseElement
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4

@@ -1,0 +1,40 @@
+package com.prismatic.liveparser.weave.elements
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import com.prismatic.liveparser.LWEntityParseScope
+import com.prismatic.liveparser.pt
+import com.prismatic.liveparser.weave.grammar.ConcreteElement
+import com.prismatic.liveparser.weave.grammar.isTextEntityStart
+import org.prismatic.opus.math.Vec2
+import org.prismatic.opus.time.MediaTime
+
+class TextElement() : ConcreteElement<TextElement>(
+    namespace = "text",
+    shorthandRecognizer = { firstLine.isTextEntityStart }
+) {
+    val fontSize by prop(12.pt)
+    val typeface by prop("")
+    val weight by prop(FontWeight.Bold)
+    val fontStyle by prop(FontStyle.Normal)
+    val font by prop(fontSize, typeface, weight, fontStyle)
+//    val text by prop("")
+    var text : String by mutableStateOf("")
+    val position by prop(Vec2.ZERO)
+    val duration by prop(MediaTime.Unspecified)
+    val color by prop(Color.Black)
+    val offset by prop(Vec2.ZERO) {
+        accumulateMultipleInstances()
+    }
+
+    override fun LWEntityParseScope.parse() {
+        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
+    }
+
+    override fun makeInstance(): TextElement = TextElement()
+    override fun debugString(): String = "text:${text.replace("\n", "\\n")}"
+}

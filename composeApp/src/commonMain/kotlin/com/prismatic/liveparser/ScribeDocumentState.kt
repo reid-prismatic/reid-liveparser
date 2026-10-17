@@ -1,9 +1,7 @@
 package com.prismatic.liveparser
 
-import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.runtime.mutableStateListOf
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import com.prismatic.liveparser.weave.grammar.DecomposedLine
+import com.prismatic.liveparser.weave.grammar.decomposeLine
 
 data class ScriptLine(
     val lineText: String,                   // Full text of the original line as entered in the editor
