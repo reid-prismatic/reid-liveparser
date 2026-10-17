@@ -10,6 +10,7 @@ import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.pt
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
 import com.prismatic.liveparser.weave.grammar.isTextEntityStart
+import com.prismatic.liveparser.weave.grammar.textEntityPrefixes
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.time.MediaTime
 
@@ -24,6 +25,7 @@ class TextElement() : ConcreteElement<TextElement>(
     val font by prop(fontSize, typeface, weight, fontStyle)
 //    val text by prop("")
     var text : String by mutableStateOf("")
+    var textType : String by mutableStateOf("")
     val position by prop(Vec2.ZERO)
     val duration by prop(MediaTime.Unspecified)
     val color by prop(Color.Black)
@@ -31,10 +33,27 @@ class TextElement() : ConcreteElement<TextElement>(
         accumulateMultipleInstances()
     }
 
-    override fun LWEntityParseScope.parse() {
-        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
+    override fun parseBody(bodyLines: List<String>) {
+        text = bodyLines.joinToString("\n")
+    }
+
+    override fun parseArguments(arguments: String) {
+        textType = arguments.trim()
+    }
+
+    override fun parseShorthandBody(bodyLines: List<String>) {
+        val firstBodyLine = bodyLines.first()
+        val textPrefix = textEntityPrefixes.entries.firstOrNull { firstBodyLine.startsWith(it.key) }
+        if( textPrefix != null) {
+            val (prefix, type) = textPrefix
+            textType = type
+            text = (listOf(firstBodyLine.drop(prefix.length)) + bodyLines.drop(1)).joinToString("\n")
+        } else {
+            textType = ""
+            text = bodyLines.joinToString("\n")
+        }
     }
 
     override fun makeInstance(): TextElement = TextElement()
-    override fun debugString(): String = "text:${text.replace("\n", "\\n")}"
+    override fun debugString(): String = "text[${textType.ifBlank { "normal" }}]:${text.replace("\n", "\\n")}"
 }

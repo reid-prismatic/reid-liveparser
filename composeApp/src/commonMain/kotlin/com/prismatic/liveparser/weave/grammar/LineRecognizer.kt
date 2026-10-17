@@ -96,9 +96,17 @@ val DecomposedLine.isCodeBlockEnd: Boolean get() = firstChar == '`' && trimmedBo
 val DecomposedLine.isPropertyLine: Boolean get() = firstChar == '-' && body.startsWith("- ")
 val DecomposedLine.isDelayEntityStart: Boolean get() = firstChar == '+'
 val DecomposedLine.isBlankLine: Boolean get() = trimmedBody.isEmpty()
-val DecomposedLine.isTextEntityStart: Boolean get() = firstChar.isLetterOrDigit() || firstChar in "._\""
+val DecomposedLine.isTextEntityStart: Boolean get() = firstChar.isLetterOrDigit() || firstChar in "._\"" || textEntityPrefixes.keys.any { body.startsWith(it) }
 val DecomposedLine.isVoiceoverEntityStart: Boolean get() = firstChar == '>' && trimmedBody.drop(1).firstOrNull { !it.isWhitespace() }?.isLetterOrDigit() ?: false
 val DecomposedLine.isSegmentBreak: Boolean get() = firstChar == '-' && trimmedBody.startsWith("----")
+
+val textEntityPrefixes = mapOf<String,String>(
+    "# " to "h1",
+    "## " to "h2",
+    "### " to "h3",
+    "#### " to "h4",
+    "##### " to "h5",
+)
 
 val DecomposedLine.contextFreeType get() = when {
     isBlankLine -> LineType.Blank

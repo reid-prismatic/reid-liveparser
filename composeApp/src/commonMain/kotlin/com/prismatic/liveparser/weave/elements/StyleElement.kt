@@ -12,9 +12,14 @@ class StyleElement() : DefinitionElement<StyleElement>(
     shorthandRecognizer = { firstLine.isStyleEntityStart },
 ) {
     var styleName by mutableStateOf("")
-    override fun LWEntityParseScope.parse() {
-        styleName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':').trim()
+    override fun parseArguments(arguments: String) {
+        styleName = arguments
     }
+
+    override fun parseShorthandBody(bodyLines: List<String>) {
+        styleName = bodyLines.first().trim().removeSurrounding("{", "}").trim()
+    }
+
     override fun makeInstance(): StyleElement = StyleElement()
     override fun debugString(): String = "style:$styleName"
 }

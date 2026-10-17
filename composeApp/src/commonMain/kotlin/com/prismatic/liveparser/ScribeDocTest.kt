@@ -342,7 +342,7 @@ class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType,Sc
     val firstLine = baseScope.entityLines.first().decomposeLine()
     private val terminalLines = baseScope.entityLines.asReversed().asSequence().map { it.decomposeLine() }.takeWhile { it.isBlankLine || it.isPropertyLine }.toList().reversed()
     val propertyLines = terminalLines.filter { it.isPropertyLine }
-    val bodyLines = entityLines.subList(1, entityLines.size - terminalLines.size)
+    val bodyLines = entityLines.subList(0, entityLines.size - terminalLines.size)
 }
 
 //private fun LiveParseEntityScope<LineType, ScribeEntity>.parseEntity(firstLineType: LineType): ScribeEntity {

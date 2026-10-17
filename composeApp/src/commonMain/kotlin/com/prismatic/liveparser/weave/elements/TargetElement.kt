@@ -12,8 +12,8 @@ class TargetElement() : DefinitionElement<TargetElement>(
 ) {
     var targetName by mutableStateOf("")
     val ratio by prop(16 to 9)
-    override fun LWEntityParseScope.parse() {
-        targetName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':',"").trim()
+    override fun parseArguments(arguments: String) {
+        targetName = arguments
     }
     override fun makeInstance(): TargetElement = TargetElement()
     override fun debugString(): String = "target:$targetName"

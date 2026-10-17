@@ -14,8 +14,11 @@ class MediaElement() : ConcreteElement<MediaElement>(
 ) {
     var filename : String by mutableStateOf("")
     val duration by prop(MediaTime.Unspecified)
-    override fun LWEntityParseScope.parse() {
-        filename = firstLine.trimmedBody.removeSurrounding("[","]").trim()
+    override fun parseArguments(arguments: String) {
+        filename = arguments
+    }
+    override fun parseShorthandBody(bodyLines: List<String>) {
+        filename = bodyLines.first().trim().removeSurrounding("[","]").trim()
     }
     override fun debugString(): String = "media:$filename"
 
