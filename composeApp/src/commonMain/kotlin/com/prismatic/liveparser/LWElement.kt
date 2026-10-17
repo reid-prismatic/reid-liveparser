@@ -77,7 +77,10 @@ class TextElement() : ConcreteElement<TextElement>(
     val font by prop(fontSize, typeface, weight, fontStyle)
 //    val text by prop("")
     var text : String by mutableStateOf("")
-    val position by prop(Vec2.ZERO) {
+    val position by prop(Vec2.ZERO)
+    val duration by prop(MediaTime.Unspecified)
+    val color by prop(Color.Black)
+    val offset by prop(Vec2.ZERO) {
         accumulateMultipleInstances()
     }
 
@@ -86,6 +89,34 @@ class TextElement() : ConcreteElement<TextElement>(
     }
 
     override fun makeInstance(): TextElement = TextElement()
+}
+
+class VoiceoverElement() : ConcreteElement<VoiceoverElement>(
+    namespace = "voiceover",
+    shorthandRecognizer = { firstLine.isVoiceoverEntityStart }
+) {
+    var text : String by mutableStateOf("")
+    val voice by prop("")
+    val volume by prop(0)
+    val duration by prop(MediaTime.Unspecified)
+    override fun LWEntityParseScope.parse() {
+        text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
+    }
+
+    override fun makeInstance(): VoiceoverElement = VoiceoverElement()
+}
+
+class MediaElement() : ConcreteElement<MediaElement>(
+    namespace = "media",
+    shorthandRecognizer = { firstLine.isConcreteEntityStart && ":" !in firstLine.body && "." in firstLine.body }
+) {
+    var filename : String by mutableStateOf("")
+    val duration by prop(MediaTime.Unspecified)
+    override fun LWEntityParseScope.parse() {
+        filename = firstLine.trimmedBody.removeSurrounding("[","]").trim()
+    }
+
+    override fun makeInstance(): MediaElement = MediaElement()
 }
 
 abstract class ConcreteElement<T: ConcreteElement<T>>(
@@ -102,7 +133,9 @@ class ErrorElement : LWElement<ErrorElement>() {
 }
 
 val elements = listOf<LWElement<*>>(
-    TextElement()
+    TextElement(),
+    VoiceoverElement(),
+    MediaElement()
 )
 
 fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
