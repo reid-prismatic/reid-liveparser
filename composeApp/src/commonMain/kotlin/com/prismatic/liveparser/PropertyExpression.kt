@@ -15,7 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
+import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
+import org.prismatic.opus.time.takeOrElse
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -149,29 +151,37 @@ sealed class PropertyExpression : ParsedProperty {
     abstract fun toDebugString(): String
     open fun toFlatString(): String = toDebugString()
 
+    sealed class PropertyExpressionLiteral : PropertyExpression()
+
     /** `42`, `0xFF` */
-    data class IntegerLiteral(val value: Long) : PropertyExpression() {
+    data class IntegerLiteral(val value: Long) : PropertyExpressionLiteral() {
         override fun toDebugString(): String = "$value"
     }
 
     /** `1.5`, `.5`, `2.5e-3`: a floating point value (no distinction is made between float and double). */
-    data class NumberLiteral(val value: Double) : PropertyExpression() {
+    data class NumberLiteral(val value: Double) : PropertyExpressionLiteral() {
         override fun toDebugString(): String = "$value"
     }
 
     /** `true` or `false` */
-    data class BooleanLiteral(val value: Boolean) : PropertyExpression() {
+    data class BooleanLiteral(val value: Boolean) : PropertyExpressionLiteral() {
         override fun toDebugString(): String = "$value"
     }
 
+    /** A ratio such as 16:9 (for visual ratios, the numerator is the width part, the denominator is the height part).
+     */
+    data class RatioLiteral(val numerator: Int, val denominator: Int) : PropertyExpressionLiteral() {
+        override fun toDebugString(): String = "$numerator:$denominator"
+    }
+
     /** `"text"` or `'text'`; [value] has its escape sequences resolved. */
-    data class StringLiteral(val value: String) : PropertyExpression() {
+    data class StringLiteral(val value: String) : PropertyExpressionLiteral() {
         override fun toDebugString(): String = "\"$value\""
         override fun toFlatString(): String = value
     }
 
     /** `#RRGGBB` (fully opaque) or `#AARRGGBB`; [argb] is always the full `0xAARRGGBB` value. */
-    data class ColorLiteral(val argb: UInt) : PropertyExpression() {
+    data class ColorLiteral(val argb: UInt) : PropertyExpressionLiteral() {
         val alpha: Int get() = (argb shr 24).toInt()
         val red: Int get() = ((argb shr 16) and 0xFFu).toInt()
         val green: Int get() = ((argb shr 8) and 0xFFu).toInt()
@@ -183,20 +193,20 @@ sealed class PropertyExpression : ParsedProperty {
     }
 
     /** `250ms`, `1.5s`, `2min` (or `2m`), `1h`: [value] is the number as written, in [unit]s. */
-    data class TimeLiteral(val value: Double, val unit: DurationUnit) : PropertyExpression() {
+    data class TimeLiteral(val value: Double, val unit: DurationUnit) : PropertyExpressionLiteral() {
         val duration: Duration get() = value.toDuration(unit)
         override fun toDebugString(): String = "$value${unit.abbr}"
     }
 
     /** `12pt`, `2.5cm`, `10mm`, `1in`: a length; [value] is the number as written, in [unit]s. */
-    data class DimensionLiteral(val value: Double, val unit: DimensionUnit) : PropertyExpression() {
+    data class DimensionLiteral(val value: Double, val unit: DimensionUnit) : PropertyExpressionLiteral() {
         /** The same length in points. */
         val points: Double get() = value * unit.points
         override fun toDebugString(): String = "$value${unit.symbol}"
     }
 
     /** `50%`: [value] is the number as written (`50.0`); [fraction] is the same amount as a ratio (`0.5`). */
-    data class PercentageLiteral(val value: Double) : PropertyExpression() {
+    data class PercentageLiteral(val value: Double) : PropertyExpressionLiteral() {
         val fraction: Double get() = value / 100.0
         override fun toDebugString(): String = "${value*100}%"
     }
@@ -314,6 +324,7 @@ sealed class PropertyExpression : ParsedProperty {
 
     enum class UnaryOperator(val symbol: String) {
         NEGATE("-"),
+        UNARY_POSITIVE("+"),
         NOT("!"),
     }
 
@@ -324,6 +335,13 @@ sealed class PropertyExpression : ParsedProperty {
         DIVIDE("/"),
         AND("&&"),
         OR("||"),
+        RATIO(":"),
+        EQUAL("=="),
+        NOT_EQUAL("!="),
+        LESS_OR_EQUAL("<="),
+        GREATER_OR_EQUAL(">="),
+        LESS("<"),
+        GREATER(">"),
     }
 
     companion object {
@@ -338,7 +356,7 @@ sealed class PropertyExpression : ParsedProperty {
                 is String -> StringLiteral(value)
                 is Boolean -> BooleanLiteral(value)
                 is Color -> ColorLiteral(value.toArgb().toUInt())
-                is Time -> TimeLiteral(value.toSeconds().asDouble(),DurationUnit.SECONDS)
+                is Time -> TimeLiteral(value.takeOrElse { MediaTime.ZERO }.toSeconds().asDouble(),DurationUnit.SECONDS)
                 is Float -> NumberLiteral(value.toDouble())
                 is Double -> NumberLiteral(value)
                 is Vec2 -> Vector(listOf(of(value.x), of(value.y)))
@@ -352,6 +370,22 @@ sealed class PropertyExpression : ParsedProperty {
             }
         }
     }
+}
+
+private val PropertyExpression.Keyframe.isLiteralSubexpression: Boolean get() = value.isLiteralSubexpression && (time == null || time.isLiteralSubexpression)
+private val PropertyExpression.Segment.isLiteralSubexpression: Boolean get() = end.isLiteralSubexpression && (easing==null || easing.isLiteralSubexpression)
+private val PropertyExpression.Easing.isLiteralSubexpression: Boolean get() = when(this) {
+    is PropertyExpression.Easing.CubicBezier -> x1.isLiteralSubexpression && y1.isLiteralSubexpression && x2.isLiteralSubexpression && y2.isLiteralSubexpression
+    is PropertyExpression.Easing.FunctionCall -> arguments.all { it.isLiteralSubexpression }
+    is PropertyExpression.Easing.Lambda -> body.isLiteralSubexpression
+    is PropertyExpression.Easing.Named -> true
+}
+
+val PropertyExpression.isLiteralSubexpression : Boolean get() = when {
+    this is PropertyExpression.PropertyExpressionLiteral -> true
+    this is PropertyExpression.Vector && this.components.all { it.isLiteralSubexpression } -> true
+    this is PropertyExpression.Animation && this.start.isLiteralSubexpression && this.segments.all { it.isLiteralSubexpression } -> true
+    else -> false
 }
 
 /**
@@ -376,6 +410,7 @@ internal class PropertyExpressionParser(
 
     private enum class Kind {
         LITERAL, NAME,
+        COLON, EQUAL_EQUAL, BANG_EQUAL, LESS_EQUAL, GREATER_EQUAL, LESS, GREATER,
         PLUS, MINUS, STAR, SLASH, AND_AND, OR_OR, BANG,
         LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
         COMMA, AT, DOT_DOT, ARROW,
@@ -419,14 +454,28 @@ internal class PropertyExpressionParser(
 
         private val DIMENSION_UNITS = PropertyExpression.DimensionUnit.entries.associateBy { it.symbol }
 
+        const val PRECEDENCE_LOGICAL_OR = 1
+        const val PRECEDENCE_LOGICAL_AND = 2
+        const val PRECEDENCE_EQUALITY = 3
+        const val PRECEDENCE_ARITHMETIC = 4
+        const val PRECEDENCE_MULTIPLICATIVE = 5
+        const val PRECEDENCE_RATIO = 6
+
         /** The binary operators and their precedence: a higher one binds tighter. All are left-associative. */
         private val BINARY_OPERATORS = mapOf(
-            Kind.OR_OR to Pair(PropertyExpression.BinaryOperator.OR, 1),
-            Kind.AND_AND to Pair(PropertyExpression.BinaryOperator.AND, 2),
-            Kind.PLUS to Pair(PropertyExpression.BinaryOperator.ADD, 3),
-            Kind.MINUS to Pair(PropertyExpression.BinaryOperator.SUBTRACT, 3),
-            Kind.STAR to Pair(PropertyExpression.BinaryOperator.MULTIPLY, 4),
-            Kind.SLASH to Pair(PropertyExpression.BinaryOperator.DIVIDE, 4),
+            Kind.OR_OR to Pair(PropertyExpression.BinaryOperator.OR, PRECEDENCE_LOGICAL_OR),
+            Kind.AND_AND to Pair(PropertyExpression.BinaryOperator.AND, PRECEDENCE_LOGICAL_AND),
+            Kind.PLUS to Pair(PropertyExpression.BinaryOperator.ADD, PRECEDENCE_ARITHMETIC),
+            Kind.MINUS to Pair(PropertyExpression.BinaryOperator.SUBTRACT, PRECEDENCE_ARITHMETIC),
+            Kind.STAR to Pair(PropertyExpression.BinaryOperator.MULTIPLY, PRECEDENCE_MULTIPLICATIVE),
+            Kind.SLASH to Pair(PropertyExpression.BinaryOperator.DIVIDE, PRECEDENCE_MULTIPLICATIVE),
+            Kind.EQUAL_EQUAL to Pair(PropertyExpression.BinaryOperator.EQUAL, PRECEDENCE_EQUALITY),
+            Kind.BANG_EQUAL to Pair(PropertyExpression.BinaryOperator.NOT_EQUAL, PRECEDENCE_EQUALITY),
+            Kind.LESS_EQUAL to Pair(PropertyExpression.BinaryOperator.LESS_OR_EQUAL, PRECEDENCE_EQUALITY),
+            Kind.GREATER_EQUAL to Pair(PropertyExpression.BinaryOperator.GREATER_OR_EQUAL, PRECEDENCE_EQUALITY),
+            Kind.LESS to Pair(PropertyExpression.BinaryOperator.LESS, PRECEDENCE_EQUALITY),
+            Kind.GREATER to Pair(PropertyExpression.BinaryOperator.GREATER, PRECEDENCE_EQUALITY),
+            Kind.COLON to Pair(PropertyExpression.BinaryOperator.RATIO, PRECEDENCE_RATIO),
         )
 
         private fun fail(reason: String, start: Int, end: Int): Nothing =
@@ -482,6 +531,13 @@ internal class PropertyExpressionParser(
                 c == '+' -> symbol(Kind.PLUS, 1)
                 c == '*' -> symbol(Kind.STAR, 1)
                 c == '/' -> symbol(Kind.SLASH, 1)
+                c == '!' && next == '=' -> symbol(Kind.BANG_EQUAL, 2)
+                c == '=' && next == '=' -> symbol(Kind.EQUAL_EQUAL, 2)
+                c == '<' && next == '=' -> symbol(Kind.LESS_EQUAL, 2)
+                c == '>' && next == '=' -> symbol(Kind.GREATER_EQUAL, 2)
+                c == '<' -> symbol(Kind.LESS, 1)
+                c == '>' -> symbol(Kind.GREATER, 1)
+                c == ':' -> symbol(Kind.COLON, 1)
                 c == '!' -> symbol(Kind.BANG, 1)
                 c == '-' -> if (next == '>') symbol(Kind.ARROW, 2) else symbol(Kind.MINUS, 1)
                 c == '.' && next == '.' -> range()
@@ -1143,6 +1199,7 @@ internal class PropertyExpressionParser(
             // nothing follows is not a subtraction either, with or without whitespace at the end of the text.
             val isSign = isAdjacent(index + 1) || tokens[index + 1].kind == Kind.END
             if (current.kind == Kind.MINUS && isComponentBreak() && isSign) return left
+            if (current.kind == Kind.PLUS && isComponentBreak() && isSign) return left
             index++
             // Only tighter operators may join the right operand, which makes this one left-associative
             val right = parseBinary(precedence + 1)
@@ -1155,6 +1212,7 @@ internal class PropertyExpressionParser(
         val token = current
         val operator = when (token.kind) {
             Kind.MINUS -> PropertyExpression.UnaryOperator.NEGATE
+            Kind.PLUS -> PropertyExpression.UnaryOperator.UNARY_POSITIVE
             Kind.BANG -> PropertyExpression.UnaryOperator.NOT
             else -> return parsePrimary()
         }

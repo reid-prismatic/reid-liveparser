@@ -118,6 +118,9 @@ fun PropertyExpression.Easing.resolve(context: PropertyExpressionContext): Compo
 
 fun interpolate(a: PropertyExpression, b: PropertyExpression, t: Float): PropertyExpression = when {
     a is NumberLiteral && b is NumberLiteral -> NumberLiteral(a.value * (1f-t) + b.value * t)
+    a is IntegerLiteral && b is IntegerLiteral -> NumberLiteral(a.value.toDouble() * (1f-t) + b.value.toDouble() * t)
+    a is IntegerLiteral && b is NumberLiteral -> NumberLiteral(a.value.toDouble() * (1f-t) + b.value * t)
+    a is NumberLiteral && b is IntegerLiteral -> NumberLiteral(a.value * (1f-t) + b.value.toDouble() * t)
     a is Vector && b is Vector -> Vector(a.components.zip(b.components).map { (a, b) -> interpolate(a,b,t) })
     a is ColorLiteral && b is ColorLiteral -> {
         val colorA = Color(a.argb.toInt())
@@ -181,37 +184,68 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
                         }
                 )
             } else if( left is StringLiteral ) {
-                StringLiteral(left.value + right.toFlatString())
+                when (operator) {
+                    BinaryOperator.ADD -> StringLiteral(left.value + right.toFlatString())
+                    BinaryOperator.EQUAL -> BooleanLiteral(right is StringLiteral && left.value == right.value)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(right !is StringLiteral || left.value != right.value)
+                    else -> this
+                }
             } else if ( left is BooleanLiteral && right is BooleanLiteral) {
                 when (operator) {
                     BinaryOperator.AND -> BooleanLiteral(left.value && right.value)
                     BinaryOperator.OR -> BooleanLiteral(left.value || right.value)
-                    else -> throw IllegalStateException()
+                    BinaryOperator.EQUAL -> BooleanLiteral(left.value == right.value)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(left.value != right.value)
+                    else -> this
                 }
             } else if( left is IntegerLiteral && right is IntegerLiteral ) {
                 val a = left.value
                 val b = right.value
-                IntegerLiteral(when(operator) {
-                    BinaryOperator.ADD -> a + b
-                    BinaryOperator.SUBTRACT -> a - b
-                    BinaryOperator.MULTIPLY -> a * b
-                    BinaryOperator.DIVIDE -> a / b
-                    BinaryOperator.AND -> throw IllegalStateException()
-                    BinaryOperator.OR -> throw IllegalStateException()
-                })
+                when(operator) {
+                    BinaryOperator.ADD -> IntegerLiteral(a + b)
+                    BinaryOperator.SUBTRACT -> IntegerLiteral(a - b)
+                    BinaryOperator.MULTIPLY -> IntegerLiteral(a * b)
+                    BinaryOperator.DIVIDE -> IntegerLiteral(a / b)
+                    BinaryOperator.AND -> this
+                    BinaryOperator.OR -> this
+                    BinaryOperator.RATIO -> RatioLiteral(a.toInt(),b.toInt())
+                    BinaryOperator.EQUAL -> BooleanLiteral(a==b)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(a!=b)
+                    BinaryOperator.LESS_OR_EQUAL -> BooleanLiteral(a <= b)
+                    BinaryOperator.GREATER_OR_EQUAL -> BooleanLiteral(a > b)
+                    BinaryOperator.LESS -> BooleanLiteral(a < b)
+                    BinaryOperator.GREATER -> BooleanLiteral(a > b)
+                }
             } else if( (left is NumberLiteral || left is IntegerLiteral) && (right is NumberLiteral || right is IntegerLiteral) ) {
                 val a = (left as? IntegerLiteral)?.value?.toDouble() ?: (left as? NumberLiteral)?.value ?: Double.NaN
                 val b = (right as? IntegerLiteral)?.value?.toDouble() ?: (right as? NumberLiteral)?.value ?: Double.NaN
-                NumberLiteral(when(operator) {
-                    BinaryOperator.ADD -> a + b
-                    BinaryOperator.SUBTRACT -> a - b
-                    BinaryOperator.MULTIPLY -> a * b
-                    BinaryOperator.DIVIDE -> a / b
-                    BinaryOperator.AND -> throw IllegalStateException()
-                    BinaryOperator.OR -> throw IllegalStateException()
-                })
+                when (operator) {
+                    BinaryOperator.ADD -> NumberLiteral(a + b)
+                    BinaryOperator.SUBTRACT -> NumberLiteral(a - b)
+                    BinaryOperator.MULTIPLY -> NumberLiteral(a * b)
+                    BinaryOperator.DIVIDE -> NumberLiteral(a / b)
+                    BinaryOperator.AND -> this
+                    BinaryOperator.OR -> this
+                    BinaryOperator.RATIO -> this
+                    BinaryOperator.EQUAL -> BooleanLiteral(a == b)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(a != b)
+                    BinaryOperator.LESS_OR_EQUAL -> BooleanLiteral(a <= b)
+                    BinaryOperator.GREATER_OR_EQUAL -> BooleanLiteral(a > b)
+                    BinaryOperator.LESS -> BooleanLiteral(a < b)
+                    BinaryOperator.GREATER -> BooleanLiteral(a > b)
+                }
+            } else if(left is SemanticTag && right is SemanticTag) {
+                when(operator) {
+                    BinaryOperator.EQUAL -> BooleanLiteral(left.name==right.name)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(left.name!=right.name)
+                    else -> this
+                }
             } else {
-                this
+                when(operator) {
+                    BinaryOperator.EQUAL -> BooleanLiteral(left.isLiteralSubexpression && right.isLiteralSubexpression && left==right)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(!(left.isLiteralSubexpression && right.isLiteralSubexpression && left==right))
+                    else -> this
+                }
             }
         }
         is BooleanLiteral,
@@ -221,6 +255,7 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
         is NumberLiteral,
         is StringLiteral,
         is SemanticTag,
+        is RatioLiteral,
         is TimeLiteral -> this
         is PercentageLiteral -> NumberLiteral(this.fraction)
         is FunctionCall -> context.callFunction(name,arguments.map { it.evaluate(context) }) ?: this
@@ -235,6 +270,7 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
                     is TimeLiteral -> operand.copy(value = -operand.value)
                     else -> throw IllegalStateException()
                 }
+                UnaryOperator.UNARY_POSITIVE -> operand
                 UnaryOperator.NOT -> when(operand) {
                     is BooleanLiteral -> BooleanLiteral(!operand.value)
                     else -> throw IllegalStateException()
