@@ -67,7 +67,7 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
 }
 
 class TextElement() : ConcreteElement<TextElement>(
-    namespace = "TextElement",
+    namespace = "text",
     shorthandRecognizer = { firstLine.isTextEntityStart }
 ) {
     val fontSize by prop(12.pt)
