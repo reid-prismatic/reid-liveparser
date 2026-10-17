@@ -4,6 +4,11 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.Color
 import com.prismatic.liveparser.PropertyExpression.*
+import org.prismatic.opus.time.MediaTime
+import org.prismatic.opus.time.Micros
+import org.prismatic.opus.time.Millis
+import org.prismatic.opus.time.Nanos
+import org.prismatic.opus.time.Seconds
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
 import kotlin.time.DurationUnit
@@ -15,6 +20,14 @@ interface PropertyExpressionContext {
     val progress: Float
     fun resolveVariable(symbol: String): PropertyExpression?
     fun callFunction(symbol: String, args: List<PropertyExpression>): PropertyExpression?
+    companion object {
+        val Empty = object : PropertyExpressionContext {
+            override val duration: Time = 1.seconds
+            override val progress: Float = 0f
+            override fun resolveVariable(symbol: String): PropertyExpression? = null
+            override fun callFunction(symbol: String, args: List<PropertyExpression>): PropertyExpression? = null
+        }
+    }
 }
 
 class PropertyExpressionLambdaContext(val parameters: List<String>, val baseContext: PropertyExpressionContext) : PropertyExpressionContext by baseContext {
@@ -75,7 +88,7 @@ fun PropertyExpression.toPercentOrNull() : Double? = when (this) {
 }
 
 fun PropertyExpression.toTimeOrNull() : Time? = when (this) {
-    is PropertyExpression.TimeLiteral -> value.toDuration(unit).toDouble(DurationUnit.SECONDS).seconds
+    is PropertyExpression.TimeLiteral -> value
     else -> null
 }
 
@@ -162,7 +175,9 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
             }
             var prevP = 0f
             var prevValue : PropertyExpression? = null
+            println("Animation: ${context.progress} in ${parts.joinToString(",") {(p,value,easing) ->  "$p:$value($easing)" }}")
             parts.sortedBy { (p,value,easing) -> p }.forEach { (p,value,easing) ->
+                println("----- Check part: $p:$value($easing): ${context.progress} <= $p : ${context.progress <= p} prevValue=$prevValue")
                 if( context.progress <= p ) {
                     if(prevValue==null) return value
                     val t = easing.transform(((context.progress - prevP) / (p-prevP)).coerceIn(0f,1f))
@@ -216,6 +231,119 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
                     BinaryOperator.LESS -> BooleanLiteral(a < b)
                     BinaryOperator.GREATER -> BooleanLiteral(a > b)
                 }
+            } else if( left is TimeLiteral && (right is NumberLiteral || right is IntegerLiteral) ) {
+                val a = left.value
+                val b = (right as? IntegerLiteral)?.value?.toDouble() ?: (right as? NumberLiteral)?.value ?: Double.NaN
+                when (operator) {
+                    BinaryOperator.ADD -> this
+                    BinaryOperator.SUBTRACT -> this
+                    BinaryOperator.MULTIPLY -> when(a) {
+                        is Seconds -> TimeLiteral(a*b)
+                        is Micros -> TimeLiteral(a*b)
+                        is Millis -> TimeLiteral(a*b)
+                        is Nanos -> TimeLiteral(a*b)
+                        is MediaTime -> TimeLiteral(a*b)
+                        else -> TimeLiteral(a.toSeconds()*b)
+                    }
+                    BinaryOperator.DIVIDE -> when(a) {
+                        is Seconds -> TimeLiteral(a/b)
+                        is Micros -> TimeLiteral(a/b)
+                        is Millis -> TimeLiteral(a/b)
+                        is Nanos -> TimeLiteral(a/b)
+                        is MediaTime -> TimeLiteral(a/b)
+                        else -> TimeLiteral(a.toSeconds()/b)
+                    }
+                    BinaryOperator.AND -> this
+                    BinaryOperator.OR -> this
+                    BinaryOperator.RATIO -> this
+                    BinaryOperator.EQUAL -> BooleanLiteral(false)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(true)
+                    BinaryOperator.LESS_OR_EQUAL -> this
+                    BinaryOperator.GREATER_OR_EQUAL -> this
+                    BinaryOperator.LESS -> this
+                    BinaryOperator.GREATER -> this
+                }
+            } else if( left is TimeLiteral && right is TimeLiteral ) {
+                val a : Time = left.value
+                val b : Time = right.value
+                when(operator) {
+                    BinaryOperator.ADD -> when {
+                        a is Seconds && b is Seconds -> TimeLiteral(a + b )
+                        a is Millis && b is Millis -> TimeLiteral(a + b )
+                        a is Micros && b is Micros -> TimeLiteral(a + b )
+                        a is Nanos && b is Nanos -> TimeLiteral(a + b )
+                        a is MediaTime && b is MediaTime -> TimeLiteral(a + b )
+                        a is Seconds || b is Seconds -> TimeLiteral(a.toSeconds() + b.toSeconds() )
+                        a is Nanos || b is Nanos -> TimeLiteral(a.toNanos() + b.toNanos() )
+                        else -> TimeLiteral(a.toSeconds() + b.toSeconds()  )
+                    }
+                    BinaryOperator.SUBTRACT -> when {
+                        a is Seconds && b is Seconds -> TimeLiteral(a - b )
+                        a is Millis && b is Millis -> TimeLiteral(a - b )
+                        a is Micros && b is Micros -> TimeLiteral(a - b )
+                        a is Nanos && b is Nanos -> TimeLiteral(a - b )
+                        a is MediaTime && b is MediaTime -> TimeLiteral(a - b )
+                        a is Seconds || b is Seconds -> TimeLiteral(a.toSeconds() - b.toSeconds() )
+                        a is Nanos || b is Nanos -> TimeLiteral(a.toNanos() - b.toNanos() )
+                        else -> TimeLiteral(a.toSeconds() - b.toSeconds()  )
+                    }
+                    BinaryOperator.MULTIPLY -> this
+                    BinaryOperator.DIVIDE -> when {
+                        a is Seconds && b is Seconds -> NumberLiteral(a / b )
+                        a is Millis && b is Millis -> NumberLiteral(a / b )
+                        a is Micros && b is Micros -> NumberLiteral(a / b )
+                        a is Nanos && b is Nanos -> NumberLiteral(a / b )
+                        a is MediaTime && b is MediaTime -> NumberLiteral(a / b )
+                        a is Seconds || b is Seconds -> NumberLiteral(a.toSeconds() / b.toSeconds() )
+                        a is Nanos || b is Nanos -> NumberLiteral(a.toNanos() / b.toNanos() )
+                        else -> NumberLiteral(a.toSeconds() / b.toSeconds()  )
+                    }
+                    BinaryOperator.AND -> this
+                    BinaryOperator.OR -> this
+                    BinaryOperator.RATIO -> this
+                    BinaryOperator.EQUAL -> BooleanLiteral(a==b)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(a!=b)
+                    BinaryOperator.LESS_OR_EQUAL -> when {
+                        a is Seconds && b is Seconds -> BooleanLiteral(a <= b )
+                        a is Millis && b is Millis -> BooleanLiteral(a <= b )
+                        a is Micros && b is Micros -> BooleanLiteral(a <= b )
+                        a is Nanos && b is Nanos -> BooleanLiteral(a <= b )
+                        a is MediaTime && b is MediaTime -> BooleanLiteral(a <= b )
+                        a is Seconds || b is Seconds -> BooleanLiteral(a.toSeconds() <= b.toSeconds() )
+                        a is Nanos || b is Nanos -> BooleanLiteral(a.toNanos() <= b.toNanos() )
+                        else -> BooleanLiteral(a.toSeconds() <= b.toSeconds()  )
+                    }
+                    BinaryOperator.GREATER_OR_EQUAL -> when {
+                        a is Seconds && b is Seconds -> BooleanLiteral(a >= b )
+                        a is Millis && b is Millis -> BooleanLiteral(a >= b )
+                        a is Micros && b is Micros -> BooleanLiteral(a >= b )
+                        a is Nanos && b is Nanos -> BooleanLiteral(a >= b )
+                        a is MediaTime && b is MediaTime -> BooleanLiteral(a >= b )
+                        a is Seconds || b is Seconds -> BooleanLiteral(a.toSeconds() >= b.toSeconds() )
+                        a is Nanos || b is Nanos -> BooleanLiteral(a.toNanos() >= b.toNanos() )
+                        else -> BooleanLiteral(a.toSeconds() >= b.toSeconds()  )
+                    }
+                    BinaryOperator.LESS -> when {
+                        a is Seconds && b is Seconds -> BooleanLiteral(a > b )
+                        a is Millis && b is Millis -> BooleanLiteral(a > b )
+                        a is Micros && b is Micros -> BooleanLiteral(a > b )
+                        a is Nanos && b is Nanos -> BooleanLiteral(a > b )
+                        a is MediaTime && b is MediaTime -> BooleanLiteral(a > b )
+                        a is Seconds || b is Seconds -> BooleanLiteral(a.toSeconds() > b.toSeconds() )
+                        a is Nanos || b is Nanos -> BooleanLiteral(a.toNanos() > b.toNanos() )
+                        else -> BooleanLiteral(a.toSeconds() > b.toSeconds()  )
+                    }
+                    BinaryOperator.GREATER -> when {
+                        a is Seconds && b is Seconds -> BooleanLiteral(a < b )
+                        a is Millis && b is Millis -> BooleanLiteral(a < b )
+                        a is Micros && b is Micros -> BooleanLiteral(a < b )
+                        a is Nanos && b is Nanos -> BooleanLiteral(a < b )
+                        a is MediaTime && b is MediaTime -> BooleanLiteral(a < b )
+                        a is Seconds || b is Seconds -> BooleanLiteral(a.toSeconds() < b.toSeconds() )
+                        a is Nanos || b is Nanos -> BooleanLiteral(a.toNanos() < b.toNanos() )
+                        else -> BooleanLiteral(a.toSeconds() < b.toSeconds()  )
+                    }
+                }
             } else if( (left is NumberLiteral || left is IntegerLiteral) && (right is NumberLiteral || right is IntegerLiteral) ) {
                 val a = (left as? IntegerLiteral)?.value?.toDouble() ?: (left as? NumberLiteral)?.value ?: Double.NaN
                 val b = (right as? IntegerLiteral)?.value?.toDouble() ?: (right as? NumberLiteral)?.value ?: Double.NaN
@@ -267,7 +395,14 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
                     is NumberLiteral -> NumberLiteral(-operand.value)
                     is DimensionLiteral -> operand.copy(value = -operand.value)
                     is PercentageLiteral -> operand.copy(value = -operand.value)
-                    is TimeLiteral -> operand.copy(value = -operand.value)
+                    is TimeLiteral -> operand.copy(value = when(operand.value) {
+                        is MediaTime -> -operand.value
+                        is Millis -> -operand.value
+                        is Micros -> -operand.value
+                        is Nanos -> -operand.value
+                        is Seconds -> -operand.value
+                        else -> -operand.value.toSeconds()
+                    })
                     else -> throw IllegalStateException()
                 }
                 UnaryOperator.UNARY_POSITIVE -> operand

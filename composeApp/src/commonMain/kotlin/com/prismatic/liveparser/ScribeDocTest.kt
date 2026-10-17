@@ -460,18 +460,19 @@ fun ScribeDocTest() {
                                 return null
                             }
                         }.withColorConstructors() }
-                            val elementName = elementEntity.element::class.simpleName
-                            val propertyString = elementEntity.element.properties.entries.joinToString("\n") { (k, v) ->
-                                val valueLines = v.parsedProperty.evaluate(propExprContext).toFlatString().lines()
-                                if(valueLines.size == 1)
-                                    "  $k: ${valueLines.first()}"
-                                else
-                                    "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
-                            }
-                            Text(
-                                "${entity.id}: $elementName(\n$propertyString\n)",
-                                Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
-                            )
+                        val elementName = elementEntity.element::class.simpleName
+                        val elementBodyString = "  " + elementEntity.element.debugString() + "\n"
+                        val propertyString = elementBodyString + elementEntity.element.properties.entries.joinToString("\n") { (k, v) ->
+                            val valueLines = v.parsedProperty.evaluate(propExprContext).toFlatString().lines()
+                            if(valueLines.size == 1)
+                                "  $k: ${valueLines.first()}"
+                            else
+                                "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
+                        }
+                        Text(
+                            "${entity.id}: $elementName(\n$propertyString\n)",
+                            Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
+                        )
                     } else {
                         Text(
                             "${entity.id}: ${entity.entity.type}",

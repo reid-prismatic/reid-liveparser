@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import org.prismatic.opus.math.Vec2
@@ -66,6 +67,31 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
     return lwee
 }
 
+class TargetElement() : DefinitionElement<TargetElement>(
+    namespace = "target",
+    shorthandRecognizer = {false}
+) {
+    var targetName by mutableStateOf("")
+    val ratio by prop(16 to 9)
+    override fun LWEntityParseScope.parse() {
+        targetName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':',"").trim()
+    }
+    override fun makeInstance(): TargetElement = TargetElement()
+    override fun debugString(): String = "target:$targetName"
+}
+
+class StyleElement() : DefinitionElement<StyleElement>(
+    namespace = "style",
+    shorthandRecognizer = {firstLine.isStyleEntityStart},
+) {
+    var styleName by mutableStateOf("")
+    override fun LWEntityParseScope.parse() {
+        styleName = firstLine.trimmedBody.trim().removeSurrounding("{", "}").trim().substringAfter(':').trim()
+    }
+    override fun makeInstance(): StyleElement = StyleElement()
+    override fun debugString(): String = "style:$styleName"
+}
+
 class TextElement() : ConcreteElement<TextElement>(
     namespace = "text",
     shorthandRecognizer = { firstLine.isTextEntityStart }
@@ -89,6 +115,7 @@ class TextElement() : ConcreteElement<TextElement>(
     }
 
     override fun makeInstance(): TextElement = TextElement()
+    override fun debugString(): String = "text:${text.replace("\n", "\\n")}"
 }
 
 class VoiceoverElement() : ConcreteElement<VoiceoverElement>(
@@ -102,6 +129,7 @@ class VoiceoverElement() : ConcreteElement<VoiceoverElement>(
     override fun LWEntityParseScope.parse() {
         text = entityLines.takeWhile { !it.trim().startsWith("- ") }.joinToString(separator = "\n")
     }
+    override fun debugString(): String = "voiceover:${text.replace("\n", "\\n")}"
 
     override fun makeInstance(): VoiceoverElement = VoiceoverElement()
 }
@@ -115,6 +143,7 @@ class MediaElement() : ConcreteElement<MediaElement>(
     override fun LWEntityParseScope.parse() {
         filename = firstLine.trimmedBody.removeSurrounding("[","]").trim()
     }
+    override fun debugString(): String = "media:$filename"
 
     override fun makeInstance(): MediaElement = MediaElement()
 }
@@ -126,24 +155,56 @@ abstract class ConcreteElement<T: ConcreteElement<T>>(
     override fun LWEntityParseScope.recognize(): Boolean = isConcreteEntity(namespace) || shorthandRecognizer()
 }
 
+abstract class DefinitionElement<T: DefinitionElement<T>>(
+    val namespace: String,
+    val shorthandRecognizer: LWEntityParseScope.() -> Boolean = { false }
+) : LWElement<T>() {
+    override fun LWEntityParseScope.recognize(): Boolean = isDefinitionEntity(namespace) || shorthandRecognizer()
+}
+
+class SegmentBreakElement() : LWElement<SegmentBreakElement>() {
+    var transition by mutableStateOf<ParsedProperty?>(null)
+    override fun LWEntityParseScope.recognize(): Boolean = firstLine.isSegmentBreak
+    override fun makeInstance(): SegmentBreakElement = SegmentBreakElement()
+    override fun LWEntityParseScope.parse() {
+        val argString = firstLine.trimmedBody.trimStart('-').trimStart()
+        transition = runCatching {  parsePropertyString(argString, PropertyType.Alternate(
+            PropertyType.Expression,
+            PropertyType.UnquotedStringLiteral,
+            ))}.getOrNull()
+    }
+    override fun debugString(): String = "segment(transition=${transition?.evaluate(PropertyExpressionContext.Empty)?.toFlatString()})"
+}
+
 class ErrorElement : LWElement<ErrorElement>() {
     override fun LWEntityParseScope.recognize(): Boolean = false
     override fun LWEntityParseScope.parse() {}
     override fun makeInstance(): ErrorElement = ErrorElement()
+    override fun debugString(): String = "error"
 }
 
 val elements = listOf<LWElement<*>>(
     TextElement(),
     VoiceoverElement(),
-    MediaElement()
+    MediaElement(),
+    TargetElement(),
+    StyleElement(),
+    SegmentBreakElement()
 )
 
 fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
     firstLine.firstChar == '[' && firstLine.lastChar == ']'
             && (':' in firstLine.trimmedBody || '.' !in firstLine.trimmedBody)
-            && firstLine.trimmedBody.removeSurrounding("[","]").substringBefore(':') == namespace
+            && firstLine.trimmedBody.trim().removeSurrounding("[","]").substringBefore(':').trim() == namespace
+
+fun LWEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
+    firstLine.firstChar == '{' && firstLine.lastChar == '}'
+            && ':' in firstLine.trimmedBody
+            && firstLine.trimmedBody.trim().removeSurrounding("{","}").substringBefore(':').trim() == namespace
 
 abstract class LWElement<T: LWElement<T>> {
+
+    abstract fun debugString(): String
 
     abstract fun LWEntityParseScope.recognize() : Boolean
     abstract fun LWEntityParseScope.parse()
@@ -221,6 +282,7 @@ abstract class LWElement<T: LWElement<T>> {
     fun prop(defaultValue: Color, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Color> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Color), def=def)
     fun prop(defaultValue: String, def:(PropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
     fun prop(defaultValue: Vec2, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
+    fun prop(defaultValue: Pair<Int,Int>, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
     fun prop(defaultValue: Vec3, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
     fun prop(defaultValue: Vec4, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
     fun prop(defaultValue: LWDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)

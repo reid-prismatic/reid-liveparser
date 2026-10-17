@@ -17,6 +17,8 @@ import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
+import org.prismatic.opus.time.millis
+import org.prismatic.opus.time.seconds
 import org.prismatic.opus.time.takeOrElse
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -193,9 +195,8 @@ sealed class PropertyExpression : ParsedProperty {
     }
 
     /** `250ms`, `1.5s`, `2min` (or `2m`), `1h`: [value] is the number as written, in [unit]s. */
-    data class TimeLiteral(val value: Double, val unit: DurationUnit) : PropertyExpressionLiteral() {
-        val duration: Duration get() = value.toDuration(unit)
-        override fun toDebugString(): String = "$value${unit.abbr}"
+    data class TimeLiteral(val value: Time) : PropertyExpressionLiteral() {
+        override fun toDebugString(): String = "$value"
     }
 
     /** `12pt`, `2.5cm`, `10mm`, `1in`: a length; [value] is the number as written, in [unit]s. */
@@ -356,7 +357,7 @@ sealed class PropertyExpression : ParsedProperty {
                 is String -> StringLiteral(value)
                 is Boolean -> BooleanLiteral(value)
                 is Color -> ColorLiteral(value.toArgb().toUInt())
-                is Time -> TimeLiteral(value.takeOrElse { MediaTime.ZERO }.toSeconds().asDouble(),DurationUnit.SECONDS)
+                is Time -> TimeLiteral(value.takeOrElse { MediaTime.ZERO })
                 is Float -> NumberLiteral(value.toDouble())
                 is Double -> NumberLiteral(value)
                 is Vec2 -> Vector(listOf(of(value.x), of(value.y)))
@@ -366,6 +367,7 @@ sealed class PropertyExpression : ParsedProperty {
                 is LWDimension.Millimeters -> DimensionLiteral(value.value, DimensionUnit.MILLIMETER)
                 is FontWeight -> IntegerLiteral(value.weight.toLong())
                 is FontStyle -> StringLiteral(value.value.toString())
+                is Pair<*,*> if value.first is Int && value.second is Int -> RatioLiteral(value.first as Int, value.second as Int)
                 else -> throw IllegalArgumentException("Cannot convert ${value?.let { it::class.simpleName}} to PropertyExpression")
             }
         }
@@ -444,12 +446,12 @@ internal class PropertyExpressionParser(
         private const val ZERO_WIDTH_NON_JOINER = 0x200C
         private const val ZERO_WIDTH_JOINER = 0x200D
 
-        private val TIME_UNITS = mapOf(
-            "ms" to DurationUnit.MILLISECONDS,
-            "s" to DurationUnit.SECONDS,
-            "m" to DurationUnit.MINUTES,
-            "min" to DurationUnit.MINUTES,
-            "h" to DurationUnit.HOURS,
+        private val TIME_CONSTRUCTOR = mapOf<String,(Double) -> Time>(
+            "ms" to {it.toLong().millis},
+            "s" to {it.seconds},
+            "m" to {(it*60).seconds},
+            "min" to {(it*60).seconds},
+            "h" to {(it*60*60).seconds},
         )
 
         private val DIMENSION_UNITS = PropertyExpression.DimensionUnit.entries.associateBy { it.symbol }
@@ -592,11 +594,11 @@ internal class PropertyExpressionParser(
             if (peek().isNameStart()) {
                 while (peek().isNamePart()) position++
                 val suffix = input.substring(start + digits.length, position)
-                val node = TIME_UNITS[suffix]?.let { PropertyExpression.TimeLiteral(toDouble(digits, start), it) }
+                val node = TIME_CONSTRUCTOR[suffix]?.let { PropertyExpression.TimeLiteral(it(toDouble(digits, start))) }
                     ?: DIMENSION_UNITS[suffix]?.let { PropertyExpression.DimensionLiteral(toDouble(digits, start), it) }
                     ?: fail(
                         "Invalid number '${input.substring(start, position)}' (the digits can only be followed " +
-                            "directly by '%', a time unit (${TIME_UNITS.keys.joinToString()}) " +
+                            "directly by '%', a time unit (${TIME_CONSTRUCTOR.keys.joinToString()}) " +
                             "or a dimension unit (${DIMENSION_UNITS.keys.joinToString()}))",
                         start,
                         position,

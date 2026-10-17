@@ -85,7 +85,8 @@ data class DecomposedLine(
 )
 
 val DecomposedLine.isConcreteEntityStart: Boolean get() = firstChar == '[' && lastChar == ']'
-val DecomposedLine.isDefinitionEntityStart: Boolean get() = firstChar == '{' && lastChar == '}'
+val DecomposedLine.isDefinitionEntityStart: Boolean get() = firstChar == '{' && lastChar == '}' && ':' in trimmedBody
+val DecomposedLine.isStyleEntityStart: Boolean get() = firstChar == '{' && lastChar == '}' && ':' !in trimmedBody
 val DecomposedLine.isScriptStart: Boolean get() = firstChar == '{' && lastChar != '}'
 val DecomposedLine.isCodeBlockStart: Boolean get() = firstChar == '`' && body.startsWith("```")
 val DecomposedLine.isScriptEnd: Boolean get() = firstChar == '}' && trimmedBody.length==1
@@ -100,7 +101,8 @@ val DecomposedLine.isSegmentBreak: Boolean get() = firstChar == '-' && trimmedBo
 val DecomposedLine.contextFreeType get() = when {
     isBlankLine -> LineType.Blank
     isConcreteEntityStart -> LineType.ConcreteEntityStart
-    isDefinitionEntityStart -> LineType.DefinitionEntityBody
+    isDefinitionEntityStart -> LineType.DefinitionEntityStart
+    isStyleEntityStart -> LineType.DefinitionEntityStart
     isScriptStart -> LineType.ScriptStart
     isScriptEnd -> LineType.ScriptEnd
     isCodeBlockStart -> LineType.CodeStart

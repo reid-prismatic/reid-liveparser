@@ -94,7 +94,8 @@ enum class PropertyDataType {
     Boolean,
     Vec2,
     Vec3,
-    Vec4
+    Vec4,
+    Ratio
 }
 
 private fun requireOptions(options: List<String>) {
@@ -926,10 +927,11 @@ private class PropertyStringParser(private val input: String) {
         PropertyDataType.Percent -> this is PropertyExpression.PercentageLiteral
         PropertyDataType.SemanticTag -> this is PropertyExpression.SemanticTag
         PropertyDataType.Boolean -> this is PropertyExpression.BooleanLiteral
-        PropertyDataType.Char -> TODO()
-        PropertyDataType.Vec2 -> TODO()
-        PropertyDataType.Vec3 -> TODO()
-        PropertyDataType.Vec4 -> TODO()
+        PropertyDataType.Char -> this is PropertyExpression.StringLiteral && (value.length == 1 || value.isEmpty())
+        PropertyDataType.Vec2 -> this is PropertyExpression.Vector && this.components.size==2 && this.isLiteralSubexpression
+        PropertyDataType.Vec3 -> this is PropertyExpression.Vector && this.components.size==3 && this.isLiteralSubexpression
+        PropertyDataType.Vec4 -> this is PropertyExpression.Vector && this.components.size==4 && this.isLiteralSubexpression
+        PropertyDataType.Ratio -> this is PropertyExpression.RatioLiteral
     }
 
     /** Notes that the text at [start] does not start an expression of [type]. */
