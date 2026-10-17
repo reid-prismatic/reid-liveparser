@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -92,8 +93,6 @@ private data class MarkdownPropertiesImpl(
     override val rotateAxis: Vec3 = Vec3(0f,0f,1f),
     override val rotateAngle: Float = 0f,
 ): MarkdownProperties
-
-
 
 data class EntityTiming(val delayNext: Boolean, val background: Boolean)
 
@@ -460,12 +459,19 @@ fun ScribeDocTest() {
                             ): PropertyExpression? {
                                 return null
                             }
-                        } }
-                        Text(
-                            "${entity.id}: ${elementEntity.element::class.simpleName}(${elementEntity.element.properties.map { (k,v) -> "$k: ${v.parsedProperty.evaluate(propExprContext).toFlatString()}" }})",
-                            Modifier.background(if (selected) Color.Yellow else Color.White)
-                        )
-
+                        }.withColorConstructors() }
+                            val elementName = elementEntity.element::class.simpleName
+                            val propertyString = elementEntity.element.properties.entries.joinToString("\n") { (k, v) ->
+                                val valueLines = v.parsedProperty.evaluate(propExprContext).toFlatString().lines()
+                                if(valueLines.size == 1)
+                                    "  $k: ${valueLines.first()}"
+                                else
+                                    "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
+                            }
+                            Text(
+                                "${entity.id}: $elementName(\n$propertyString\n)",
+                                Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
+                            )
                     } else {
                         Text(
                             "${entity.id}: ${entity.entity.type}",
