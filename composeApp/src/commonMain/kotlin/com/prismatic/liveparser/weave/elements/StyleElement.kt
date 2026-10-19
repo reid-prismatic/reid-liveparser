@@ -11,6 +11,7 @@ class StyleElement() : DefinitionElement<StyleElement>(
     namespace = "style",
     shorthandRecognizer = { firstLine.isStyleEntityStart },
 ) {
+    override val elementTypeName: String get() = "Style"
     val styleDescription by prop("")
     val styleProperties by otherProps()
 

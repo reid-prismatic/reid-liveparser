@@ -14,6 +14,7 @@ import com.prismatic.liveparser.weave.grammar.LWElement
 import com.prismatic.liveparser.weave.grammar.isSegmentBreak
 
 class SegmentBreakElement() : LWElement<SegmentBreakElement>() {
+    override val elementTypeName: String get() = "Break"
     var transition by mutableStateOf<ParsedProperty?>(null)
     override fun LWEntityParseScope.recognize(): Boolean = firstLine.isSegmentBreak
     override fun makeInstance(): SegmentBreakElement = SegmentBreakElement()

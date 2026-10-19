@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.prismatic.liveparser.weave.elements.ErrorElement
 import com.prismatic.liveparser.weave.elements.StyleElement
+import com.prismatic.liveparser.weave.elements.TextElement
+import com.prismatic.liveparser.weave.elements.VoiceoverElement
 import com.prismatic.liveparser.weave.grammar.*
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -182,6 +184,14 @@ fun ScribeDocTest() {
                             "foo" -> PropertyExpression.of(123)
                             "bar" -> PropertyExpression.of("Test")
                             "cts" -> PropertyExpression.of(t)
+                            "elementType" -> PropertyExpression.of(elementEntity.elementTypeName)
+                            "textType" -> PropertyExpression.of((elementEntity as? TextElement)?.textType?.ifBlank { "Text" } ?: "")
+                            "H1" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h1")
+                            "H2" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h2")
+                            "H3" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h3")
+                            "H4" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h4")
+                            "Text" -> PropertyExpression.of(elementEntity is TextElement)
+                            "Voiceover" -> PropertyExpression.of(elementEntity is VoiceoverElement)
                             else -> null
                         }
 
@@ -206,10 +216,10 @@ fun ScribeDocTest() {
                         }
                     } else ""
                     val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
-                        val styleProperties: List<ParsedProperty> = elementEntity.styles
+                        val styleProperties: List<ParsedProperty> = (elementEntity.styles + listOf("*"))
                             .flatMap { style -> styleElements[style] ?: emptyList() }
                             .flatMap { styleElement -> styleElement.styleProperties.filter { it.name == k } }
-//                            .filter { it.condition } // TODO: Handle condition here
+                            .filter { it.condition==null || (it.condition.evaluate(propExprContext) as? PropertyExpression.BooleanLiteral)?.value == true } // TODO: Handle condition here
                             .map { it.value }
                         val accumulator = v.multiInstanceAccumulator
                         val resolvedProperty = if( accumulator != null ) {

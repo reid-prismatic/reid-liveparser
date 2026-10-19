@@ -19,6 +19,7 @@ class TextElement() : ConcreteElement<TextElement>(
     namespace = "text",
     shorthandRecognizer = { firstLine.isTextEntityStart }
 ) {
+    override val elementTypeName: String get() = "Text"
     val fontSize by prop(12.pt)
     val typeface by prop("")
     val weight by prop(FontWeight.Bold)

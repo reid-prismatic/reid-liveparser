@@ -14,6 +14,7 @@ class VoiceoverElement() : ConcreteElement<VoiceoverElement>(
     namespace = "voiceover",
     shorthandRecognizer = { firstLine.isVoiceoverEntityStart }
 ) {
+    override val elementTypeName: String get() = "Voiceover"
     var text : String by mutableStateOf("")
     val voice by prop("")
     val volume by prop(0)

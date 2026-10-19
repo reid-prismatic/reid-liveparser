@@ -17,6 +17,7 @@ import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
 import com.prismatic.liveparser.weave.elements.ErrorElement
+import com.prismatic.liveparser.weave.properties.PropertyLineParseResult
 import com.prismatic.liveparser.weave.properties.parsePropertyLine
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
@@ -38,39 +39,48 @@ fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: Lin
     val match = matches.singleOrNull() ?: return ErrorElement()
     val inst: LWElement<*> = existingEntity ?: match.makeInstance()
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
-    val propLines = entityLines.drop(bodyLines.size)
-    val props = mutableMapOf<String,MutableList<String>>()
-    val otherProps = mutableMapOf<String,MutableList<String>>()
+    val propLines = entityLines.drop(bodyLines.size).filter { it.isNotBlank() }
+    val props = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
+    val otherProps = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
     val styles = mutableListOf<String>()
     propLines.forEach { line ->
         val parseResult = parsePropertyLine(line)
         val key = parseResult.name
         val targetProperty = match.properties[key]
-        // TODO: Handle conditions
         if( parseResult.style.isNotEmpty() ) {
             styles += parseResult.style
         } else if( targetProperty == null ) {
             if( match.acceptsOtherProperties ) {
-                otherProps.getOrPut(key,{mutableListOf()}).add(parseResult.value)
+                otherProps.getOrPut(key,{mutableListOf()}).add(parseResult)
+            } else {
+                // TODO: Error, unrecognized property
             }
         } else {
+            if(parseResult.condition.isNotBlank()) {
+                // TODO: Error, property conditions not allow except in style definitions
+            }
             if(targetProperty.multiInstanceAccumulator!=null) {
-                props.getOrPut(key,{mutableListOf()}).add(parseResult.value)
+                props.getOrPut(key,{mutableListOf()}).add(parseResult)
             } else {
                 props.getOrPut(key,{mutableListOf()}).apply {
                     clear()
-                    add(parseResult.value)
+                    add(parseResult)
                 }
             }
         }
     }
     if( inst.acceptsOtherProperties ) {
         val otherPropLines = otherProps.flatMap { (key,values) ->
-            values.map { value ->
+            values.map { parseResult ->
                 PropertyLine(
                     name = key,
+                    condition = if(parseResult.condition.isBlank()) {
+                        null
+                    } else {
+                        parsePropertyStringHandlingErrors(parseResult.condition, PropertyType.Expression)
+                    },
                     value = parsePropertyStringHandlingErrors(
-                        s = value,
+                        s = parseResult.value,
                         type = PropertyType.Expression      // TODO: This should handle situations like compound properties (for fonts)
                     )
                 )
@@ -82,12 +92,12 @@ fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: Lin
     for ((k, v) in props) {
         val prop = inst.properties[k] ?: continue
         if( v.size == 1 ) {
-            val parsed = parsePropertyStringHandlingErrors(v.first(), prop.type)
+            val parsed = parsePropertyStringHandlingErrors(v.first().value, prop.type)
             prop.update(parsed)
         } else if( v.size > 1 ) {
             val accumulator = prop.multiInstanceAccumulator ?: PropertyAccumulator.Sum
             val parsed = v.asSequence().map {
-                parsePropertyStringHandlingErrors(it, prop.type)
+                parsePropertyStringHandlingErrors(it.value, prop.type)
             }.reduce { a, b ->
                 when {
                     a !is PropertyExpression -> b
@@ -134,6 +144,8 @@ fun LWEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
             && firstLine.trimmedBody.trim().removeSurrounding("{","}").substringBefore(':').trim() == namespace
 
 abstract class LWElement<T: LWElement<T>> {
+
+    abstract val elementTypeName: String
 
     abstract fun debugString(): String
 
@@ -322,7 +334,7 @@ abstract class LWElement<T: LWElement<T>> {
     }
 }
 
-class PropertyLine(val name: String, val value: ParsedProperty)
+class PropertyLine(val name: String, val value: ParsedProperty, val condition: ParsedProperty?)
 
 interface ElementPropertyAdapter {
     fun setProperty(key: String, value: String)

@@ -12,6 +12,7 @@ class MediaElement() : ConcreteElement<MediaElement>(
     namespace = "media",
     shorthandRecognizer = { firstLine.isConcreteEntityStart && ":" !in firstLine.body && "." in firstLine.body }
 ) {
+    override val elementTypeName: String get() = "Media"
     var filename : String by mutableStateOf("")
     val duration by prop(MediaTime.Unspecified)
     override fun parseArguments(arguments: String) {
