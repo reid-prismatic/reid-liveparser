@@ -1,9 +1,5 @@
 package com.prismatic.liveparser.weave.grammar
 
-import com.prismatic.liveparser.isPropertyNameChar
-import com.prismatic.liveparser.isPropertyNameStartChar
-import com.prismatic.liveparser.isStyleNameChar
-
 data class PropertyLineParseResult(
     val success: Boolean = true,
     val errorOffset: Int = -1,
@@ -13,6 +9,10 @@ data class PropertyLineParseResult(
     val value: String = "",
     val condition: String = ""
 )
+
+fun Char.isPropertyNameStartChar() = isLetter() || this == '_'
+fun Char.isPropertyNameChar() = isLetterOrDigit() || this == '_' || this == '-'
+fun Char.isStyleNameChar() = isLetterOrDigit() || this == '_'
 
 sealed class PropertyParseErrorType(val message: String) {
     data class UnexpectedChar(val expected: Char, val actual: Char) : PropertyParseErrorType("Expected $expected, got $actual")
