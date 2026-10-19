@@ -11,6 +11,9 @@ class StyleElement() : DefinitionElement<StyleElement>(
     namespace = "style",
     shorthandRecognizer = { firstLine.isStyleEntityStart },
 ) {
+    val styleDescription by prop("")
+    val styleProperties by otherProps()
+
     var styleName by mutableStateOf("")
     override fun parseArguments(arguments: String) {
         styleName = arguments

@@ -1,12 +1,14 @@
 package com.prismatic.liveparser.weave.grammar
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.LWDimension
+import com.prismatic.liveparser.LWElementEntity
 import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.LiveParseEntityScope
 import com.prismatic.liveparser.ParsedProperty
@@ -30,14 +32,14 @@ import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseElement(firstLineType: LineType): com.prismatic.liveparser.LWElementEntity {
+fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
     val scope = LWEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
-    val match = matches.singleOrNull() ?: return _root_ide_package_.com.prismatic.liveparser.LWElementEntity(
+    val match = matches.singleOrNull() ?: return LWElementEntity(
         ErrorElement(),
         firstLineType
     )
-    val lwee = (existingEntity as? com.prismatic.liveparser.LWElementEntity) ?: _root_ide_package_.com.prismatic.liveparser.LWElementEntity(
+    val lwee = (existingEntity as? LWElementEntity) ?: LWElementEntity(
         match.makeInstance(),
         firstLineType
     )
@@ -45,34 +47,59 @@ fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseE
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
     val propLines = entityLines.drop(bodyLines.size)
     val props = mutableMapOf<String,MutableList<String>>()
+    val otherProps = mutableMapOf<String,MutableList<String>>()
+    val styles = mutableListOf<String>()
     propLines.forEach { line ->
-        val key = line.substringBefore(':', "").trim().removePrefix("- ").trim()
+        val parseResult = parsePropertyLine(line)
+        val key = parseResult.name
         val targetProperty = match.properties[key]
-        if( targetProperty != null ) {
-            val value = line.substringAfter(':', "").trim()
-            if(targetProperty.accumulateInstances) {
-                props.getOrPut(key,{mutableListOf()}).add(value)
+        // TODO: Handle conditions
+        if( parseResult.style.isNotEmpty() ) {
+            styles += parseResult.style
+        } else if( targetProperty == null ) {
+            if( match.acceptsOtherProperties ) {
+                otherProps.getOrPut(key,{mutableListOf()}).add(parseResult.value)
+            }
+        } else {
+            if(targetProperty.multiInstanceAccumulator!=null) {
+                props.getOrPut(key,{mutableListOf()}).add(parseResult.value)
             } else {
                 props.getOrPut(key,{mutableListOf()}).apply {
                     clear()
-                    add(value)
+                    add(parseResult.value)
                 }
             }
         }
     }
+    if( inst.acceptsOtherProperties ) {
+        val otherPropLines = otherProps.flatMap { (key,values) ->
+            values.map { value ->
+                PropertyLine(
+                    name = key,
+                    value = parsePropertyStringHandlingErrors(
+                        s = value,
+                        type = PropertyType.Expression      // TODO: This should handle situations like compound properties (for fonts)
+                    )
+                )
+            }
+        }
+        inst.updateOtherProperties(otherPropLines)
+    }
+    inst.updateStyles(styles)
     for ((k, v) in props) {
         val prop = inst.properties[k] ?: continue
         if( v.size == 1 ) {
-            val parsed = runCatching { parsePropertyString(v.first(),prop.type) }
-                .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
-                .getOrNull() ?: PropertyExpression.of("null")
+            val parsed = parsePropertyStringHandlingErrors(v.first(), prop.type)
             prop.update(parsed)
         } else if( v.size > 1 ) {
-            val parsed = v.asSequence().mapNotNull { runCatching {  parsePropertyString(it,prop.type) }.getOrNull() }.reduce { a, b ->
+            val accumulator = prop.multiInstanceAccumulator ?: PropertyAccumulator.Sum
+            val parsed = v.asSequence().map {
+                parsePropertyStringHandlingErrors(it, prop.type)
+            }.reduce { a, b ->
                 when {
                     a !is PropertyExpression -> b
                     b !is PropertyExpression -> a
-                    else -> PropertyExpression.Binary(PropertyExpression.BinaryOperator.ADD,a,b)
+                    else -> accumulator.makeAccumulator(a,b)
                 }
             } ?: continue
             prop.update(parsed)
@@ -82,6 +109,24 @@ fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseE
         scope.parse()
     }
     return lwee
+}
+
+fun interface PropertyAccumulator {
+    fun makeAccumulator(a: PropertyExpression, b: PropertyExpression):PropertyExpression
+    companion object {
+        val Sum = PropertyAccumulator { a, b ->
+            PropertyExpression.Binary(PropertyExpression.BinaryOperator.ADD,a,b)
+        }
+        val Product = PropertyAccumulator { a, b ->
+            PropertyExpression.Binary(PropertyExpression.BinaryOperator.MULTIPLY,a,b)
+        }
+    }
+}
+
+private fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedProperty{
+    return runCatching { parsePropertyString(s,type) }
+        .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
+        .getOrNull() ?: PropertyExpression.of("null")
 }
 
 fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
@@ -105,13 +150,28 @@ abstract class LWElement<T: LWElement<T>> {
     var propertyList : List<Prop<*>> = emptyList()
         private set
 
+    var styles: List<String> by mutableStateOf(emptyList())
+        private set
     val properties: Map<String, Prop<*>> by lazy {propertyList.associateBy { it.key }}
+    val otherProperties: List<PropertyLine> field = mutableStateListOf()
+    var acceptsOtherProperties : Boolean = false
+        private set
+
+    fun updateStyles(styles: List<String>) {
+        this.styles = styles
+    }
+
+    fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
+        // TODO: change the following to only set property lines that have changed, to reduce state changes
+        otherProperties.clear()
+        otherProperties.addAll(otherPropLines)
+    }
 
     interface Prop<T> {
         val key: String
         val displayName: String
         val type: PropertyType
-        val accumulateInstances: Boolean
+        val multiInstanceAccumulator: PropertyAccumulator?
         fun update(value: ParsedProperty)
         val parsedProperty: ParsedProperty
     }
@@ -120,8 +180,22 @@ abstract class LWElement<T: LWElement<T>> {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T>
     }
 
+    interface MultiPropMember {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): List<PropertyLine>
+    }
+
     interface CompoundPropMember {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): Unit
+    }
+
+    private inner class MultiPropImpl() : MultiPropMember {
+        override fun getValue(
+            thisRef: Any?,
+            property: KProperty<*>
+        ): List<PropertyLine> {
+            check( acceptsOtherProperties )
+            return otherProperties
+        }
     }
 
     private inner class PropImpl<T>(
@@ -129,7 +203,7 @@ abstract class LWElement<T: LWElement<T>> {
         override val key: String,
         override val displayName: String,
         override val type: PropertyType,
-        override val accumulateInstances: Boolean,
+        override val multiInstanceAccumulator: PropertyAccumulator?,
 //        val parser: (String) -> T?
     ) : Prop<T>, PropMember<T> {
         var propValue : ParsedProperty by mutableStateOf(PropertyExpression.of(defaultValue))
@@ -146,12 +220,17 @@ abstract class LWElement<T: LWElement<T>> {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): PropMember<T>
     }
 
+    interface MultiPropProvider {
+        operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): MultiPropMember
+    }
+
+
     interface CompoundPropProvider {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): CompoundPropMember
     }
 
     interface PropertyDefScope {
-        fun accumulateMultipleInstances()
+        fun accumulateMultipleInstances(accumulator: PropertyAccumulator)
     }
 
     fun prop(defaultValue: Int, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
@@ -166,6 +245,11 @@ abstract class LWElement<T: LWElement<T>> {
     fun prop(defaultValue: Vec3, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
     fun prop(defaultValue: Vec4, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
     fun prop(defaultValue: LWDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
+    fun otherProps(): MultiPropProvider {
+        check(!acceptsOtherProperties)
+        acceptsOtherProperties = true
+        return multiPropProvider()
+    }
     fun prop(defaultValue: FontWeight, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
         propProvider(defaultValue, type = PropertyType.Alternate(
             PropertyType.UnquotedStringEnum("Thin","ExtraLight","Light","Normal","Medium","SemiBold","Bold","ExtraBold","Black"),
@@ -195,6 +279,18 @@ abstract class LWElement<T: LWElement<T>> {
         }
     }
 
+    fun multiPropProvider() : MultiPropProvider {
+        return object : MultiPropProvider {
+            override fun provideDelegate(
+                thisRef: Any?,
+                prop: KProperty<*>
+            ): MultiPropMember {
+                val liveProp = MultiPropImpl()
+                return liveProp
+            }
+        }
+    }
+
     fun <T> propProvider(
         defaultValue: T,
         key: String? = null,
@@ -204,8 +300,11 @@ abstract class LWElement<T: LWElement<T>> {
 //        parser: (String) -> T?
     ) : PropProvider<T> {
         return object : PropProvider<T>, PropertyDefScope {
-            var multiInstance = false
-            override fun accumulateMultipleInstances() {multiInstance = true}
+            var multiInstanceAccumulator: PropertyAccumulator? = null
+            override fun accumulateMultipleInstances(accumulator: PropertyAccumulator) {
+                check(multiInstanceAccumulator==null)
+                multiInstanceAccumulator = accumulator
+            }
             override fun provideDelegate(
                 thisRef: Any?,
                 prop: KProperty<*>
@@ -215,7 +314,7 @@ abstract class LWElement<T: LWElement<T>> {
                     key = key ?: prop.name,
                     displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
                     type = type,
-                    accumulateInstances = multiInstance
+                    multiInstanceAccumulator = multiInstanceAccumulator
 //                    parser = parser
                 )
                 propertyList += liveProp
@@ -224,6 +323,8 @@ abstract class LWElement<T: LWElement<T>> {
         }.also{def?.invoke(it)}
     }
 }
+
+class PropertyLine(val name: String, val value: ParsedProperty)
 
 interface ElementPropertyAdapter {
     fun setProperty(key: String, value: String)

@@ -9,6 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.pt
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
+import com.prismatic.liveparser.weave.grammar.PropertyAccumulator
 import com.prismatic.liveparser.weave.grammar.isTextEntityStart
 import com.prismatic.liveparser.weave.grammar.textEntityPrefixes
 import org.prismatic.opus.math.Vec2
@@ -30,7 +31,7 @@ class TextElement() : ConcreteElement<TextElement>(
     val duration by prop(MediaTime.Unspecified)
     val color by prop(Color.Black)
     val offset by prop(Vec2.ZERO) {
-        accumulateMultipleInstances()
+        accumulateMultipleInstances(PropertyAccumulator.Sum)
     }
 
     override fun parseBody(bodyLines: List<String>) {

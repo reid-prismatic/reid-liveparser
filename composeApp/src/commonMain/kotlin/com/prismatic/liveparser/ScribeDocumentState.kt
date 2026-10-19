@@ -52,6 +52,9 @@ sealed class ScriptLineContext {
 fun Char.isPropertyNameStartChar() = isLetter() || this == '_'
 fun Char.isPropertyNameChar() = isLetterOrDigit() || this == '_' || this == '-'
 
+fun Char.isStyleNameStartChar() = isLetter() || this == '_'
+fun Char.isStyleNameChar() = isLetterOrDigit() || this == '_'
+
 fun Char.isTextBlockStartChar() = isLetterOrDigit() || this == '_' || this == '.' || this == '"'
 fun Char.isVoiceoverBlockStart() = this == '>'
 
