@@ -4,7 +4,7 @@
  *
  * Everything in this file was implemented using AI (Fable 5.1 Max)
  */
-package com.prismatic.liveparser
+package com.prismatic.liveparser.weave.properties
 
 /** How [parsePropertyString] is to read the string of a property. */
 sealed interface PropertyType {

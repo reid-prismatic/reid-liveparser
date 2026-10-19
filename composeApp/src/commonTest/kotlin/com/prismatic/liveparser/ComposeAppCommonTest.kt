@@ -1,8 +1,8 @@
 package com.prismatic.liveparser
 
-import com.prismatic.liveparser.weave.grammar.PropertyLineParseResult
-import com.prismatic.liveparser.weave.grammar.PropertyParseErrorType
-import com.prismatic.liveparser.weave.grammar.parsePropertyLine
+import com.prismatic.liveparser.weave.properties.PropertyLineParseResult
+import com.prismatic.liveparser.weave.properties.PropertyParseErrorType
+import com.prismatic.liveparser.weave.properties.parsePropertyLine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

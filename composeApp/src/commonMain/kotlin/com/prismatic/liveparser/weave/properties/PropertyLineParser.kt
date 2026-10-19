@@ -1,4 +1,4 @@
-package com.prismatic.liveparser.weave.grammar
+package com.prismatic.liveparser.weave.properties
 
 data class PropertyLineParseResult(
     val success: Boolean = true,

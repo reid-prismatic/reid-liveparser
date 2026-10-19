@@ -6,12 +6,13 @@
  * Everything in this file was implemented using AI (Fable 5.1 Max)
  */
 
-package com.prismatic.liveparser
+package com.prismatic.liveparser.weave.properties
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.prismatic.liveparser.LWDimension
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -20,9 +21,7 @@ import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.millis
 import org.prismatic.opus.time.seconds
 import org.prismatic.opus.time.takeOrElse
-import kotlin.time.Duration
 import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 
 /**
  * Parses a property expression into a parse tree.

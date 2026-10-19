@@ -11,13 +11,15 @@ import com.prismatic.liveparser.LWDimension
 import com.prismatic.liveparser.LWElementEntity
 import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.LiveParseEntityScope
-import com.prismatic.liveparser.ParsedProperty
-import com.prismatic.liveparser.PropertyDataType
-import com.prismatic.liveparser.PropertyExpression
-import com.prismatic.liveparser.PropertyType
-import com.prismatic.liveparser.parsePropertyString
+import com.prismatic.liveparser.weave.properties.ParsedProperty
+import com.prismatic.liveparser.weave.properties.PropertyDataType
+import com.prismatic.liveparser.weave.properties.PropertyExpression
+import com.prismatic.liveparser.weave.properties.PropertyType
+import com.prismatic.liveparser.ScribeEntity
+import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
 import com.prismatic.liveparser.weave.elements.ErrorElement
+import com.prismatic.liveparser.weave.properties.parsePropertyLine
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -32,7 +34,7 @@ import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, com.prismatic.liveparser.ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
+fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
     val scope = LWEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
     val match = matches.singleOrNull() ?: return LWElementEntity(

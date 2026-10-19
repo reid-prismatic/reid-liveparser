@@ -34,6 +34,10 @@ import com.prismatic.liveparser.weave.grammar.getLineType
 import com.prismatic.liveparser.weave.grammar.isBlankLine
 import com.prismatic.liveparser.weave.grammar.isPropertyLine
 import com.prismatic.liveparser.weave.grammar.parseElement
+import com.prismatic.liveparser.weave.properties.PropertyExpression
+import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
+import com.prismatic.liveparser.weave.properties.evaluate
+import com.prismatic.liveparser.weave.properties.toFlatString
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -266,7 +270,7 @@ fun ScribeDocTest() {
                     val selected = selectedLine in entity.startLine ..entity.endLine
                     val elementEntity = entity.entity as? LWElementEntity
                     if(elementEntity != null) {
-                        val propExprContext = remember(t) { object: PropertyExpressionContext{
+                        val propExprContext = remember(t) { object: PropertyExpressionContext {
                             override val duration: Time get() = 10.seconds
                             override val progress: Float = t
 

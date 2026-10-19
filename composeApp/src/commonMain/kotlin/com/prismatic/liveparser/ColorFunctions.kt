@@ -1,6 +1,9 @@
 package com.prismatic.liveparser
 
 import androidx.compose.ui.graphics.Color
+import com.prismatic.liveparser.weave.properties.PropertyExpression
+import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
+import com.prismatic.liveparser.weave.properties.toFloatOrNull
 
 private fun PropertyExpression.toFractionalColorComponentOrNull() : Float? = when (this) {
     is PropertyExpression.IntegerLiteral -> (this.value.toFloat() / 255f).coerceIn(0.0f, 1.0f)

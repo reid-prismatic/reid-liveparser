@@ -4,12 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.LWEntityParseScope
-import com.prismatic.liveparser.ParsedProperty
-import com.prismatic.liveparser.PropertyExpressionContext
-import com.prismatic.liveparser.PropertyType
-import com.prismatic.liveparser.evaluate
-import com.prismatic.liveparser.parsePropertyString
-import com.prismatic.liveparser.toFlatString
+import com.prismatic.liveparser.weave.properties.ParsedProperty
+import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
+import com.prismatic.liveparser.weave.properties.PropertyType
+import com.prismatic.liveparser.weave.properties.evaluate
+import com.prismatic.liveparser.weave.properties.parsePropertyString
+import com.prismatic.liveparser.weave.properties.toFlatString
 import com.prismatic.liveparser.weave.grammar.LWElement
 import com.prismatic.liveparser.weave.grammar.isSegmentBreak
 

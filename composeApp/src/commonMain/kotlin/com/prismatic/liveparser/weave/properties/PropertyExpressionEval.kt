@@ -1,9 +1,9 @@
-package com.prismatic.liveparser
+package com.prismatic.liveparser.weave.properties
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.Color
-import com.prismatic.liveparser.PropertyExpression.*
+import com.prismatic.liveparser.weave.properties.PropertyExpression.*
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Micros
 import org.prismatic.opus.time.Millis
@@ -11,8 +11,6 @@ import org.prismatic.opus.time.Nanos
 import org.prismatic.opus.time.Seconds
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 import androidx.compose.animation.core.Easing as ComposeEasing
 
 interface PropertyExpressionContext {
@@ -32,7 +30,7 @@ interface PropertyExpressionContext {
 
 class PropertyExpressionLambdaContext(val parameters: List<String>, val baseContext: PropertyExpressionContext) : PropertyExpressionContext by baseContext {
     override fun resolveVariable(symbol: String): PropertyExpression? =
-        if(symbol in parameters) PropertyExpression.Variable(symbol) else this.baseContext.resolveVariable(symbol)
+        if(symbol in parameters) Variable(symbol) else this.baseContext.resolveVariable(symbol)
 }
 
 class PropertyExpressionContextWithVars( val vars: Map<String, PropertyExpression>, val baseContext: PropertyExpressionContext ) : PropertyExpressionContext by baseContext {
@@ -57,38 +55,38 @@ val DecelEasing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
 val SmoothEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
 
 fun PropertyExpression.toFloatOrNull() : Float? = when (this) {
-    is PropertyExpression.IntegerLiteral -> this.value.toFloat()
-    is PropertyExpression.NumberLiteral -> this.value.toFloat()
+    is IntegerLiteral -> this.value.toFloat()
+    is NumberLiteral -> this.value.toFloat()
     else -> null
 }
 
 fun PropertyExpression.toIntOrNull() : Int? = when (this) {
-    is PropertyExpression.IntegerLiteral -> this.value.toInt()
-    is PropertyExpression.NumberLiteral -> this.value.toInt()
+    is IntegerLiteral -> this.value.toInt()
+    is NumberLiteral -> this.value.toInt()
     else -> null
 }
 
 fun PropertyExpression.toLongOrNull() : Long? = when (this) {
-    is PropertyExpression.IntegerLiteral -> this.value
-    is PropertyExpression.NumberLiteral -> this.value.toLong()
+    is IntegerLiteral -> this.value
+    is NumberLiteral -> this.value.toLong()
     else -> null
 }
 
 fun PropertyExpression.toDoubleOrNull() : Double? = when (this) {
-    is PropertyExpression.IntegerLiteral -> this.value.toDouble()
-    is PropertyExpression.NumberLiteral -> this.value
+    is IntegerLiteral -> this.value.toDouble()
+    is NumberLiteral -> this.value
     else -> null
 }
 
 fun PropertyExpression.toPercentOrNull() : Double? = when (this) {
-    is PropertyExpression.IntegerLiteral -> this.value.toDouble().coerceIn(0.0, 1.0)
-    is PropertyExpression.NumberLiteral -> this.value.coerceIn(0.0, 1.0)
-    is PropertyExpression.PercentageLiteral -> this.fraction
+    is IntegerLiteral -> this.value.toDouble().coerceIn(0.0, 1.0)
+    is NumberLiteral -> this.value.coerceIn(0.0, 1.0)
+    is PercentageLiteral -> this.fraction
     else -> null
 }
 
 fun PropertyExpression.toTimeOrNull() : Time? = when (this) {
-    is PropertyExpression.TimeLiteral -> value
+    is TimeLiteral -> value
     else -> null
 }
 
