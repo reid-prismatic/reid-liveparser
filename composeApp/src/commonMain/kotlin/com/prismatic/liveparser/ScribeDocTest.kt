@@ -18,7 +18,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -27,109 +26,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.prismatic.liveparser.weave.grammar.LWElement
-import com.prismatic.liveparser.weave.grammar.LineType
-import com.prismatic.liveparser.weave.grammar.decomposeLine
-import com.prismatic.liveparser.weave.grammar.getLineType
-import com.prismatic.liveparser.weave.grammar.isBlankLine
-import com.prismatic.liveparser.weave.grammar.isPropertyLine
-import com.prismatic.liveparser.weave.grammar.parseElement
+import com.prismatic.liveparser.weave.elements.ErrorElement
+import com.prismatic.liveparser.weave.elements.StyleElement
+import com.prismatic.liveparser.weave.grammar.*
+import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.toFlatString
-import org.prismatic.opus.math.Vec2
-import org.prismatic.opus.math.Vec3
-import org.prismatic.opus.math.Vec4
-import org.prismatic.opus.time.FrameRate
-import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
 
-interface ScribeEntity {
-    val type: LineType
-    companion object {
-        val None = object : ScribeEntity {
-            override val type: LineType = LineType.None
-        }
-    }
-}
-
-data class LWElementEntity(val element: LWElement<*>, override val type: LineType) : ScribeEntity
-
-@Immutable
-interface MarkdownProperties : ScribeEntity{
-    val range: TextRange
-    val propRanges: Map<String,TextRange>
-    val parseErrors: List<CodeError>
-    //    val lineNumber: Int
-    val lineRange: IntRange
-    val position: Vec2
-    val size: Vec2
-    val color: Vec4
-    val font: String
-    val bold: Boolean
-    val maxWidth: Float
-    val italic: Boolean
-    val fontSize: Float
-    val scale: Vec2
-    val filters: List<String>
-    val duration: Time
-    val comment: String?
-    val voice: String
-    val rotateAxis: Vec3
-    val rotateAngle: Float
-}
-
-@Immutable
-private data class MarkdownPropertiesImpl(
-    override val type: LineType,
-    override val parseErrors: List<CodeError>,
-    override val range: TextRange,
-    override val propRanges: Map<String,TextRange>,
-    override val lineRange: IntRange,
-    override val position: Vec2 = Vec2.ZERO,
-    override val fontSize: Float = 56f,
-    override val size: Vec2 = Vec2.ZERO,
-    override val color: Vec4 = Vec4(0.7f,0.7f,0.7f,1f),
-    override val font: String = "Default",
-    override val bold: Boolean = false,
-    override val italic: Boolean = false,
-    override val maxWidth: Float = Float.NaN,
-    override val scale: Vec2 = Vec2(1f,1f),
-    override val filters: List<String> = emptyList(),
-    override val duration: Time = MediaTime.Unspecified,
-    override val comment: String? = null,
-    override val voice: String = "",
-    override val rotateAxis: Vec3 = Vec3(0f,0f,1f),
-    override val rotateAngle: Float = 0f,
-): MarkdownProperties
-
-data class EntityTiming(val delayNext: Boolean, val background: Boolean)
-
-interface OutputFormat {
-    val outputName: String
-    val resolution: Int
-    val ratio: Pair<Int,Int>
-    val frameRate: FrameRate
-}
-
-val OutputFormat.width: Int get() = if(ratio.first > ratio.second) resolution * ratio.first / ratio.second else resolution
-val OutputFormat.height: Int get() = if(ratio.first > ratio.second) resolution else resolution * ratio.second / ratio.first
-val OutputFormat.ratioFraction: Float get() = ratio.first.toFloat() / ratio.second.toFloat()
-
-@Immutable
-sealed interface MarkdownEntity : ScribeEntity, MarkdownProperties {
-    data class Style(val props: MarkdownProperties, val styleName: String): MarkdownEntity, MarkdownProperties by props
-    data class Code(val props: MarkdownProperties, val code: String): MarkdownEntity, MarkdownProperties by props
-    data class CodeSample(val props: MarkdownProperties, val code: String, val codeLanguage: String): MarkdownEntity, MarkdownProperties by props
-    data class Output(val props: MarkdownProperties, override val outputName: String, override val resolution: Int, override val ratio: Pair<Int,Int>, override val frameRate: FrameRate): OutputFormat, MarkdownEntity, MarkdownProperties by props
-    data class Text(val props: MarkdownProperties, val text: String): MarkdownEntity, MarkdownProperties by props
-    data class Voiceover(val props: MarkdownProperties, val text: String, val timing: EntityTiming, val filename: String): MarkdownEntity, MarkdownProperties by props
-    data class Media(val props: MarkdownProperties, val filename: String, val timing: EntityTiming): MarkdownEntity, MarkdownProperties by props
-    data class Divider(val props: MarkdownProperties, val transition: String): MarkdownEntity, MarkdownProperties by props
-    data class Delay(val props: MarkdownProperties, val delayTime: MediaTime): MarkdownEntity, MarkdownProperties by props
-}
 
 sealed class LWPropertyType {
     data object Int : LWPropertyType()
@@ -183,7 +90,7 @@ private inline fun <reified T> List<LWPropertyInstance<*>>.getProp(prop: LWPrope
     return value
 }
 
-class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType,ScribeEntity>) : LiveParseEntityScope<LineType, ScribeEntity> by baseScope {
+class LWEntityParseScope(private val baseScope: LiveParseEntityScope<LineType, LWElement<*>>) : LiveParseEntityScope<LineType, LWElement<*>> by baseScope {
     val firstLine = baseScope.entityLines.first().decomposeLine()
     private val terminalLines = baseScope.entityLines.asReversed().asSequence().map { it.decomposeLine() }.takeWhile { it.isBlankLine || it.isPropertyLine }.toList().reversed()
     val propertyLines = terminalLines.filter { it.isPropertyLine }
@@ -218,17 +125,16 @@ fun ScribeDocTest() {
     val listState = rememberLazyListState()
     val liveParse = textFieldState.rememberLiveParse(
         initialContext = LineType.None,
-        nullEntity = ScribeEntity.None,
+        nullEntity = ErrorElement() as LWElement<*>,
         computeContext = { line, context ->
             getLineType(line, context)
         },
         parseEntity = {
             println("ParseElement:${this.entityId}")
             parseElement(context)
-//            parseEntity(context)
         }
     )
-//    val scribeDocState = remember { ScribeDocumentState(scope) }
+    val styleElements by derivedStateOf {liveParse.entities.map { it.entity }.filterIsInstance<StyleElement>().groupBy { it.styleName }}
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     val topLine : Int by remember { derivedStateOf(structuralEqualityPolicy()) {
@@ -236,7 +142,6 @@ fun ScribeDocTest() {
     }}
     val scrollDiff : Int by remember { derivedStateOf(structuralEqualityPolicy()) {
         val t : Float = textLayoutResult?.getLineTop(listState.firstVisibleItemIndex) ?: 0f
-//        textFieldScrollState.value - listState.firstVisibleItemScrollOffset
         textFieldScrollState.value - t.toInt()
     }}
 
@@ -268,56 +173,74 @@ fun ScribeDocTest() {
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
                 items(liveParse.entities, {it.id}) { entity ->
                     val selected = selectedLine in entity.startLine ..entity.endLine
-                    val elementEntity = entity.entity as? LWElementEntity
-                    if(elementEntity != null) {
-                        val propExprContext = remember(t) { object: PropertyExpressionContext {
-                            override val duration: Time get() = 10.seconds
-                            override val progress: Float = t
+                    val elementEntity = entity.entity
+                    val propExprContext = remember(t) { object: PropertyExpressionContext {
+                        override val duration: Time get() = 10.seconds
+                        override val progress: Float = t
 
-                            override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
-                                "foo" -> PropertyExpression.of(123)
-                                "bar" -> PropertyExpression.of("Test")
-                                "cts" -> PropertyExpression.of(t)
-                                else -> null
-                            }
+                        override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
+                            "foo" -> PropertyExpression.of(123)
+                            "bar" -> PropertyExpression.of("Test")
+                            "cts" -> PropertyExpression.of(t)
+                            else -> null
+                        }
 
-                            override fun callFunction(
-                                symbol: String,
-                                args: List<PropertyExpression>
-                            ): PropertyExpression? {
-                                return null
-                            }
-                        }.withColorConstructors() }
-                        val elementName = elementEntity.element::class.simpleName
-                        val elementBodyString = "  " + elementEntity.element.debugString() + "\n"
-                        val styleString = if(elementEntity.element.styles.isNotEmpty()) elementEntity.element.styles.joinToString() { "  {$it}\n" } + " ----\n" else ""
-                        val otherPropertiesString = if(elementEntity.element.acceptsOtherProperties && elementEntity.element.otherProperties.isNotEmpty()) {
-                            "\n  ---\n"+
-                            elementEntity.element.otherProperties.joinToString("\n") {
-                                val valueLines = it.value.evaluate(propExprContext).toFlatString().lines()
-                                if(valueLines.size == 1)
-                                    "  ${it.name}: ${valueLines.first()}"
-                                else
-                                    "  ${it.name}:\n" + valueLines.joinToString("\n") {"     $it"}
-                            }
-                        } else ""
-                        val propertyString = elementBodyString + styleString + elementEntity.element.properties.entries.joinToString("\n") { (k, v) ->
-                            val valueLines = v.parsedProperty.evaluate(propExprContext).toFlatString().lines()
+                        override fun callFunction(
+                            symbol: String,
+                            args: List<PropertyExpression>
+                        ): PropertyExpression? {
+                            return null
+                        }
+                    }.withColorConstructors() }
+                    val elementName = elementEntity::class.simpleName
+                    val elementBodyString = "  " + elementEntity.debugString() + "\n"
+                    val styleString = if(elementEntity.styles.isNotEmpty()) elementEntity.styles.joinToString() { "  {$it}\n" } + " ----\n" else ""
+                    val otherPropertiesString = if(elementEntity.acceptsOtherProperties && elementEntity.otherProperties.isNotEmpty()) {
+                        "\n  ---\n"+
+                        elementEntity.otherProperties.joinToString("\n") {
+                            val valueLines = it.value.evaluate(propExprContext).toFlatString().lines()
                             if(valueLines.size == 1)
-                                "  $k: ${valueLines.first()}"
+                                "  ${it.name}: ${valueLines.first()}"
                             else
-                                "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
-                        } + otherPropertiesString
-                        Text(
-                            "${entity.id}: $elementName(\n$propertyString\n)",
-                            Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
-                        )
-                    } else {
-                        Text(
-                            "${entity.id}: ${entity.entity.type}",
-                            Modifier.background(if (selected) Color.Yellow else Color.White)
-                        )
-                    }
+                                "  ${it.name}:\n" + valueLines.joinToString("\n") {"     $it"}
+                        }
+                    } else ""
+                    val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
+                        val styleProperties: List<ParsedProperty> = elementEntity.styles
+                            .flatMap { style -> styleElements[style] ?: emptyList() }
+                            .flatMap { styleElement -> styleElement.styleProperties.filter { it.name == k } }
+//                            .filter { it.condition } // TODO: Handle condition here
+                            .map { it.value }
+                        val accumulator = v.multiInstanceAccumulator
+                        val resolvedProperty = if( accumulator != null ) {
+                            if(styleProperties.isEmpty()) {
+                                v.parsedProperty
+                            } else {
+                                (styleProperties+listOf(v.parsedProperty)).reduce { a, b ->
+                                    when {
+                                        a !is PropertyExpression -> b
+                                        b !is PropertyExpression -> a
+                                        else -> accumulator.makeAccumulator(a,b)
+                                    }
+                                }
+                            }
+                        } else {
+                            if( v.isSpecified || styleProperties.isEmpty() ) {
+                                v.parsedProperty
+                            } else {
+                                styleProperties.last()
+                            }
+                        }
+                        val valueLines = resolvedProperty.evaluate(propExprContext).toFlatString().lines()
+                        if(valueLines.size == 1)
+                            "  $k: ${valueLines.first()}"
+                        else
+                            "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
+                    } + otherPropertiesString
+                    Text(
+                        "${entity.id}: $elementName(\n$propertyString\n)",
+                        Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
+                    )
                 }
             }
         }

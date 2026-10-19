@@ -8,14 +8,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.LWDimension
-import com.prismatic.liveparser.LWElementEntity
 import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.LiveParseEntityScope
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyType
-import com.prismatic.liveparser.ScribeEntity
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
 import com.prismatic.liveparser.weave.elements.ErrorElement
@@ -34,18 +32,11 @@ import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: LineType): LWElementEntity {
+fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: LineType): LWElement<*> {
     val scope = LWEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
-    val match = matches.singleOrNull() ?: return LWElementEntity(
-        ErrorElement(),
-        firstLineType
-    )
-    val lwee = (existingEntity as? LWElementEntity) ?: LWElementEntity(
-        match.makeInstance(),
-        firstLineType
-    )
-    val inst: LWElement<*> = lwee.element
+    val match = matches.singleOrNull() ?: return ErrorElement()
+    val inst: LWElement<*> = existingEntity ?: match.makeInstance()
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
     val propLines = entityLines.drop(bodyLines.size)
     val props = mutableMapOf<String,MutableList<String>>()
@@ -107,10 +98,11 @@ fun LiveParseEntityScope<LineType, ScribeEntity>.parseElement(firstLineType: Lin
             prop.update(parsed)
         }
     }
+    (inst.properties.keys - props.keys).forEach {inst.properties[it]?.update(null)}
     with(inst) {
         scope.parse()
     }
-    return lwee
+    return inst
 }
 
 fun interface PropertyAccumulator {
@@ -174,7 +166,8 @@ abstract class LWElement<T: LWElement<T>> {
         val displayName: String
         val type: PropertyType
         val multiInstanceAccumulator: PropertyAccumulator?
-        fun update(value: ParsedProperty)
+        val isSpecified: Boolean
+        fun update(value: ParsedProperty?)
         val parsedProperty: ParsedProperty
     }
 
@@ -208,14 +201,17 @@ abstract class LWElement<T: LWElement<T>> {
         override val multiInstanceAccumulator: PropertyAccumulator?,
 //        val parser: (String) -> T?
     ) : Prop<T>, PropMember<T> {
-        var propValue : ParsedProperty by mutableStateOf(PropertyExpression.of(defaultValue))
+        val defaultPropValue = PropertyExpression.of(defaultValue)
+        var propValue : ParsedProperty? by mutableStateOf(null)
         override val parsedProperty: ParsedProperty
-            get() = propValue
+            get() = propValue ?: defaultPropValue
 //        var propValue: T = defaultValue
-        override fun update(value: ParsedProperty) {
+        override fun update(value: ParsedProperty?) {
             propValue = value
 //            propValue = parser(value) ?: defaultValue
         }
+
+        override val isSpecified: Boolean get() = propValue != null
         override fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T> = this@PropImpl
     }
     interface PropProvider<T> {
