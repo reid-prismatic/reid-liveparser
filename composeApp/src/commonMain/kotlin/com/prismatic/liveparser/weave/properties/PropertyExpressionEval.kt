@@ -66,6 +66,11 @@ fun PropertyExpression.toIntOrNull() : Int? = when (this) {
     else -> null
 }
 
+fun PropertyExpression.toBoolOrNull() : Boolean? = when (this) {
+    is BooleanLiteral -> this.value
+    else -> null
+}
+
 fun PropertyExpression.toLongOrNull() : Long? = when (this) {
     is IntegerLiteral -> this.value
     is NumberLiteral -> this.value.toLong()

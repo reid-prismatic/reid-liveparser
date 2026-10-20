@@ -35,7 +35,9 @@ import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.evaluate
+import com.prismatic.liveparser.weave.properties.toBoolOrNull
 import com.prismatic.liveparser.weave.properties.toFlatString
+import com.prismatic.liveparser.weave.properties.toIntOrNull
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
 
@@ -218,6 +220,7 @@ fun ScribeDocTest() {
                     val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
                         val styleProperties: List<ParsedProperty> = (elementEntity.styles + listOf("*"))
                             .flatMap { style -> styleElements[style] ?: emptyList() }
+                            .filter { el -> el.condition?.evaluate(propExprContext)?.toBoolOrNull() != false  }
                             .flatMap { styleElement -> styleElement.styleProperties.filter { it.name == k } }
                             .filter { it.condition==null || (it.condition.evaluate(propExprContext) as? PropertyExpression.BooleanLiteral)?.value == true } // TODO: Handle condition here
                             .map { it.value }
