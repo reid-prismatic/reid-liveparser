@@ -38,6 +38,7 @@ import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.toBoolOrNull
 import com.prismatic.liveparser.weave.properties.toFlatString
 import com.prismatic.liveparser.weave.properties.toIntOrNull
+import com.prismatic.liveparser.weave.styles.resolveStyles
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
 
@@ -218,32 +219,7 @@ fun ScribeDocTest() {
                         }
                     } else ""
                     val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
-                        val styleProperties: List<ParsedProperty> = (elementEntity.styles + listOf("*"))
-                            .flatMap { style -> styleElements[style] ?: emptyList() }
-                            .filter { el -> el.condition?.evaluate(propExprContext)?.toBoolOrNull() != false  }
-                            .flatMap { styleElement -> styleElement.styleProperties.filter { it.name == k } }
-                            .filter { it.condition==null || (it.condition.evaluate(propExprContext) as? PropertyExpression.BooleanLiteral)?.value == true } // TODO: Handle condition here
-                            .map { it.value }
-                        val accumulator = v.multiInstanceAccumulator
-                        val resolvedProperty = if( accumulator != null ) {
-                            if(styleProperties.isEmpty()) {
-                                v.parsedProperty
-                            } else {
-                                (styleProperties+listOf(v.parsedProperty)).reduce { a, b ->
-                                    when {
-                                        a !is PropertyExpression -> b
-                                        b !is PropertyExpression -> a
-                                        else -> accumulator.makeAccumulator(a,b)
-                                    }
-                                }
-                            }
-                        } else {
-                            if( v.isSpecified || styleProperties.isEmpty() ) {
-                                v.parsedProperty
-                            } else {
-                                styleProperties.last()
-                            }
-                        }
+                        val resolvedProperty = resolveStyles(elementEntity, v,styleElements,propExprContext)
                         val valueLines = resolvedProperty.evaluate(propExprContext).toFlatString().lines()
                         if(valueLines.size == 1)
                             "  $k: ${valueLines.first()}"
