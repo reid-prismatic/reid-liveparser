@@ -11,6 +11,17 @@ import kotlinx.coroutines.launch
 import kotlin.collections.forEachIndexed
 import kotlin.jvm.JvmInline
 
+data class SourceAddress(
+    /** Indicates the compilation unit if there are multiple compilation units */
+    val compilationUnit: String? = null,
+    /** The 1-based line number, relative to the start of the entity, or relative to the start of the compilation unit if [entityId] is [EntityId.None] */
+    val lineNumber: Int,
+    /** The ID of the entity that [lineNumber] is relative to, or [EntityId.None] if the line number is relative to the compilation unit*/
+    val entityId: EntityId = EntityId.None,
+    /** The range of characters in the line, or [IntRange.EMPTY] if there is no specific range */
+    val position: IntRange = IntRange.EMPTY
+)
+
 @Composable
 public fun <CONTEXT:LiveParseLineContext, ENTITY:Any> TextFieldState.rememberLiveParse(
     initialContext: CONTEXT,

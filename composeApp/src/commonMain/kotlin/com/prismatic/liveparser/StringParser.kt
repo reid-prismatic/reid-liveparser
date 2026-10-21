@@ -1,5 +1,6 @@
 package com.prismatic.liveparser
 
+import com.prismatic.liveparser.weave.properties.ParsedStringFragment
 import com.prismatic.liveparser.weave.properties.StringParseErrorType
 import com.prismatic.liveparser.weave.properties.isPropertyNameChar
 import com.prismatic.liveparser.weave.properties.isPropertyNameStartChar
@@ -37,12 +38,17 @@ abstract class StringParser(val string: String) {
     inline fun expectEnd() {
         if( i < length ) error(StringParseErrorType.EndExpected)
     }
-    inline fun extract(block:()->Unit) : String {
+    inline fun extract(block:()->Unit) : ParsedStringFragment {
         val start = i
         block()
-        return string.substring(start, i)
+        return ParsedStringFragment(string.substring(start, i), start..<i)
     }
-    val remainingText: String get() = string.substring(i)
+//    val remainingText: String get() = string.substring(i)
+    inline fun extractRemaining() : ParsedStringFragment {
+        val start = i
+        i = length
+        return ParsedStringFragment(string.substring(start, i), start..<i)
+    }
     inline val atEnd : Boolean get() = i >= length
 
 

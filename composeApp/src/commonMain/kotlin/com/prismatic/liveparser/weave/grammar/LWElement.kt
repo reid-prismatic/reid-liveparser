@@ -39,12 +39,14 @@ fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: Lin
     val match = matches.singleOrNull() ?: return ErrorElement()
     val inst: LWElement<*> = existingEntity ?: match.makeInstance()
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
-    val propLines = entityLines.drop(bodyLines.size).filter { it.isNotBlank() }
+//    val propLines = entityLines.drop(bodyLines.size).filter { it.isNotBlank() }
     val props = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
     val otherProps = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
     val styles = mutableListOf<String>()
-    propLines.forEach { line ->
-        val parseResult = parsePropertyLine(line)
+    for( lineIndex in bodyLines.size..entityLines.lastIndex) {
+        val line = entityLines[lineIndex]
+        if( line.isBlank() ) continue
+        val parseResult = parsePropertyLine(line).copy(lineNumber = lineIndex)
         val key = parseResult.name
         val targetProperty = match.properties[key]
         if( parseResult.style.isNotEmpty() ) {
@@ -89,14 +91,15 @@ fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: Lin
         inst.updateOtherProperties(otherPropLines)
     }
     inst.updateStyles(styles)
-    for ((k, v) in props) {
-        val prop = inst.properties[k] ?: continue
-        if( v.size == 1 ) {
-            val parsed = parsePropertyStringHandlingErrors(v.first().value, prop.type)
-            prop.update(parsed)
-        } else if( v.size > 1 ) {
+    for ((propName, propLines) in props) {
+        val prop = inst.properties[propName] ?: continue
+        if( propLines.size == 1 ) {
+            val propLine = propLines.first()
+            val parsed = parsePropertyStringHandlingErrors(propLine.value, prop.type)
+            prop.update(parsed, propLine.lineNumber, propLine.nameRange, propLine.valueRange)
+        } else if( propLines.size > 1 ) {
             val accumulator = prop.multiInstanceAccumulator ?: PropertyAccumulator.Sum
-            val parsed = v.asSequence().map {
+            val parsed = propLines.asSequence().map {
                 parsePropertyStringHandlingErrors(it.value, prop.type)
             }.reduce { a, b ->
                 when {
@@ -105,7 +108,7 @@ fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: Lin
                     else -> accumulator.makeAccumulator(a,b)
                 }
             } ?: continue
-            prop.update(parsed)
+            prop.update(parsed, propLines.last().lineNumber, propLines.last().nameRange, propLines.last().valueRange)
         }
     }
     (inst.properties.keys - props.keys).forEach {inst.properties[it]?.update(null)}
@@ -179,8 +182,12 @@ abstract class LWElement<T: LWElement<T>> {
         val type: PropertyType
         val multiInstanceAccumulator: PropertyAccumulator?
         val isSpecified: Boolean
-        fun update(value: ParsedProperty?)
+        fun update(value: ParsedProperty?, lineNumber: Int = -1, nameRange: IntRange = IntRange.EMPTY, valueRange: IntRange = IntRange.EMPTY)
         val parsedProperty: ParsedProperty
+        val lineNumber: Int // Line number relative to start of entity
+        val conditionRange: IntRange
+        val nameRange: IntRange
+        val valueRange: IntRange
     }
 
     interface PropMember<T> {
@@ -211,17 +218,27 @@ abstract class LWElement<T: LWElement<T>> {
         override val displayName: String,
         override val type: PropertyType,
         override val multiInstanceAccumulator: PropertyAccumulator?,
-//        val parser: (String) -> T?
     ) : Prop<T>, PropMember<T> {
         val defaultPropValue = PropertyExpression.of(defaultValue)
         var propValue : ParsedProperty? by mutableStateOf(null)
         override val parsedProperty: ParsedProperty
             get() = propValue ?: defaultPropValue
-//        var propValue: T = defaultValue
-        override fun update(value: ParsedProperty?) {
+
+        override fun update(value: ParsedProperty?, lineNumber: Int, nameRange: IntRange, valueRange: IntRange) {
             propValue = value
-//            propValue = parser(value) ?: defaultValue
+            this.lineNumber = lineNumber
+            this.nameRange = nameRange
+            this.valueRange = valueRange
         }
+
+        override var lineNumber: Int = -1
+            private set
+        override var conditionRange: IntRange = IntRange.EMPTY
+            private set
+        override var nameRange: IntRange = IntRange.EMPTY
+            private set
+        override var valueRange: IntRange = IntRange.EMPTY
+            private set
 
         override val isSpecified: Boolean get() = propValue != null
         override fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T> = this@PropImpl

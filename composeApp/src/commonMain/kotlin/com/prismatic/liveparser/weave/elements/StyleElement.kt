@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.StringParser
 import com.prismatic.liveparser.weave.grammar.DefinitionElement
 import com.prismatic.liveparser.weave.grammar.isStyleEntityStart
+import com.prismatic.liveparser.weave.properties.ParsedStringFragment
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.StringParseErrorType
 import com.prismatic.liveparser.weave.properties.isStyleNameStartChar
@@ -54,8 +55,8 @@ private fun parseStyleArgs(args: String) : StyleArgsParseResult {
         return StyleArgsParseResult(
             success = true,
             wildcard = parser.wildcard,
-            styleName = parser.styleName,
-            condition = parser.condition
+            styleName = parser.styleName.value,
+            condition = parser.condition.value
         )
     } catch ( e: StringParser.ParseFailure ) {
         return StyleArgsParseResult(
@@ -69,14 +70,14 @@ private fun parseStyleArgs(args: String) : StyleArgsParseResult {
 private class StyleArgParser(args: String) : StringParser(args) {
 
     var wildcard: Boolean = false
-    var styleName: String = ""
-    var condition: String = ""
+    var styleName: ParsedStringFragment = ParsedStringFragment.Empty
+    var condition: ParsedStringFragment = ParsedStringFragment.Empty
 
     fun parse() {
         skipWhitespace()
         if(ch=='*') {
             wildcard = true
-            styleName = "*"
+            styleName = extract { advance() }
         } else {
             styleName = parseStyleName()
         }

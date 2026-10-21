@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.LWDimension
+import com.prismatic.liveparser.toStringAsFixed
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -162,7 +163,7 @@ sealed class PropertyExpression : ParsedProperty {
 
     /** `1.5`, `.5`, `2.5e-3`: a floating point value (no distinction is made between float and double). */
     data class NumberLiteral(val value: Double) : PropertyExpressionLiteral() {
-        override fun toDebugString(): String = "$value"
+        override fun toDebugString(): String = value.toFloat().toStringAsFixed(3)
     }
 
     /** `true` or `false` */
@@ -249,8 +250,13 @@ sealed class PropertyExpression : ParsedProperty {
         init {
             require(components.size in 2..4) { "A vector has 2 to 4 components, not ${components.size}" }
         }
-        override fun toDebugString(): String = "Vec${components.size}:\n" +
-                components.asSequence().flatMap { it.toDebugString().lineSequence() }.joinToString("\n") { "  $it" }
+        override fun toDebugString(): String {
+            val componentStrings = components.asSequence().map { it.toDebugString() }
+            return if( components.size <= 4 && componentStrings.all { '\n' !in it && it.length < 10 })
+                "Vec${components.size}(${componentStrings.joinToString(", ")})"
+            else "Vec${components.size}:\n" +
+                    components.asSequence().flatMap { it.toDebugString().lineSequence() }.joinToString("\n") { "  $it" }
+        }
     }
 
     /**

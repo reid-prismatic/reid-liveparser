@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -178,62 +180,128 @@ fun ScribeDocTest() {
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
                 items(liveParse.entities, {it.id}) { entity ->
                     val selected = selectedLine in entity.startLine ..entity.endLine
-                    val elementEntity = entity.entity
-                    val propExprContext = remember(t) { object: PropertyExpressionContext {
-                        override val duration: Time get() = 10.seconds
-                        override val progress: Float = t
 
-                        override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
-                            "foo" -> PropertyExpression.of(123)
-                            "bar" -> PropertyExpression.of("Test")
-                            "cts" -> PropertyExpression.of(t)
-                            "elementType" -> PropertyExpression.of(elementEntity.elementTypeName)
-                            "textType" -> PropertyExpression.of((elementEntity as? TextElement)?.textType?.ifBlank { "Text" } ?: "")
-                            "H1" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h1")
-                            "H2" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h2")
-                            "H3" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h3")
-                            "H4" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h4")
-                            "Text" -> PropertyExpression.of(elementEntity is TextElement)
-                            "Voiceover" -> PropertyExpression.of(elementEntity is VoiceoverElement)
-                            else -> null
+                    EntityDetails(
+                        entity, t,
+                        Modifier
+                            .background(if (selected) Color.Yellow else Color.White)
+                            .fillMaxWidth(),
+                        styleResolver = { property, propExprContext ->
+                            resolveStyles(entity.entity, property, styleElements, propExprContext)
                         }
-
-                        override fun callFunction(
-                            symbol: String,
-                            args: List<PropertyExpression>
-                        ): PropertyExpression? {
-                            return null
-                        }
-                    }.withColorConstructors() }
-                    val elementName = elementEntity::class.simpleName
-                    val elementBodyString = "  " + elementEntity.debugString() + "\n"
-                    val styleString = if(elementEntity.styles.isNotEmpty()) elementEntity.styles.joinToString() { "  {$it}\n" } + " ----\n" else ""
-                    val otherPropertiesString = if(elementEntity.acceptsOtherProperties && elementEntity.otherProperties.isNotEmpty()) {
-                        "\n  ---\n"+
-                        elementEntity.otherProperties.joinToString("\n") {
-                            val valueLines = it.value.evaluate(propExprContext).toFlatString().lines()
-                            if(valueLines.size == 1)
-                                "  ${it.name}: ${valueLines.first()}"
-                            else
-                                "  ${it.name}:\n" + valueLines.joinToString("\n") {"     $it"}
-                        }
-                    } else ""
-                    val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
-                        val resolvedProperty = resolveStyles(elementEntity, v,styleElements,propExprContext)
-                        val valueLines = resolvedProperty.evaluate(propExprContext).toFlatString().lines()
-                        if(valueLines.size == 1)
-                            "  $k: ${valueLines.first()}"
-                        else
-                            "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
-                    } + otherPropertiesString
-                    Text(
-                        "${entity.id}: $elementName(\n$propertyString\n)",
-                        Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
                     )
+
+//                    val elementEntity = entity.entity
+//                    val propExprContext = remember(t) {
+//                        SamplePropertyExpressionContext(10.seconds, t, elementEntity).withColorConstructors()
+//                    }
+//                    val elementName = elementEntity::class.simpleName
+//                    val elementBodyString = "  " + elementEntity.debugString() + "\n"
+//                    val styleString = if(elementEntity.styles.isNotEmpty()) elementEntity.styles.joinToString() { "  {$it}\n" } + " ----\n" else ""
+//                    val otherPropertiesString = if(elementEntity.acceptsOtherProperties && elementEntity.otherProperties.isNotEmpty()) {
+//                        "\n  ---\n"+
+//                        elementEntity.otherProperties.joinToString("\n") {
+//                            val valueLines = it.value.evaluate(propExprContext).toFlatString().lines()
+//                            if(valueLines.size == 1)
+//                                "  ${it.name}: ${valueLines.first()}"
+//                            else
+//                                "  ${it.name}:\n" + valueLines.joinToString("\n") {"     $it"}
+//                        }
+//                    } else ""
+//                    val propertyString = elementBodyString + styleString + elementEntity.properties.entries.joinToString("\n") { (k, v) ->
+//                        val resolvedProperty = resolveStyles(elementEntity, v,styleElements,propExprContext)
+//                        val valueLines = resolvedProperty.evaluate(propExprContext).toFlatString().lines()
+//                        if(valueLines.size == 1)
+//                            "  $k: ${valueLines.first()}"
+//                        else
+//                            "  $k:\n" + valueLines.joinToString("\n") {"     $it"}
+//                    } + otherPropertiesString
+//                    Text(
+//                        "${entity.id}: $elementName(\n$propertyString\n)",
+//                        Modifier.background(if (selected) Color.Yellow else Color.White), style = TextStyle(fontSize = 12.sp, lineHeight = 12.sp)
+//                    )
                 }
             }
         }
         Slider(t, {t=it}, Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun EntityDetails(
+    parseEntity: LiveParseEntity<LWElement<*>>,
+    t: Float,
+    modifier: Modifier = Modifier,
+    styleResolver: (property: LWElement.Prop<*>, propExprContext: PropertyExpressionContext)->ParsedProperty
+) {
+
+    val element = parseEntity.entity
+
+    val propExprContext = remember(t) {
+        SamplePropertyExpressionContext(10.seconds, t, element).withColorConstructors()
+    }
+
+    ProvideTextStyle(TextStyle(fontSize = 10.sp, lineHeight = 11.sp)) {
+        Column(modifier) {
+            Text("${parseEntity.id}: ${element.elementTypeName}", Modifier.padding(top = 5.dp))
+            val body = element.debugString()
+            if (body.isNotBlank()) {
+                HorizontalDivider()
+                Text(body, Modifier.padding(start = 10.dp))
+            }
+            if( element.styles.isNotEmpty() ) {
+                HorizontalDivider()
+                element.styles.forEach { style ->
+                    Text("{$style}", Modifier.padding(start = 10.dp))
+                }
+                HorizontalDivider()
+            }
+            element.properties.forEach { prop ->
+                Row {
+                    val lineNumberStr = if(prop.value.lineNumber>=0) "(${prop.value.lineNumber + parseEntity.startLine + 1})" else ""
+                    Text( "${prop.key}$lineNumberStr:  ", Modifier.padding(start = 10.dp).width(70.dp))
+                    Text(styleResolver(prop.value, propExprContext).evaluate(propExprContext).toFlatString())
+                }
+            }
+            if (element.acceptsOtherProperties && element.otherProperties.isNotEmpty()) {
+                HorizontalDivider()
+                element.otherProperties.forEach { prop ->
+                    Text(prop.name + ":  ", Modifier.padding(start = 10.dp).width(70.dp))
+                    Text(prop.value.evaluate(PropertyExpressionContext.Empty).toFlatString())
+                }
+            }
+        }
+    }
+
+
+}
+
+private class SamplePropertyExpressionContext(
+    override val duration: Time = 10.seconds,
+    override val progress: Float = 0.5f,
+    val elementEntity: LWElement<*>
+) : PropertyExpressionContext {
+
+    override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
+        "foo" -> PropertyExpression.of(123)
+        "bar" -> PropertyExpression.of("Test")
+        "cts" -> PropertyExpression.of(progress)
+        "elementType" -> PropertyExpression.of(elementEntity.elementTypeName)
+        "textType" -> PropertyExpression.of((elementEntity as? TextElement)?.textType?.ifBlank { "Text" } ?: "")
+        "H1" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h1")
+        "H2" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h2")
+        "H3" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h3")
+        "H4" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h4")
+        "Text" -> PropertyExpression.of(elementEntity is TextElement)
+        "Voiceover" -> PropertyExpression.of(elementEntity is VoiceoverElement)
+        else -> null
+    }
+
+    override fun callFunction(
+        symbol: String,
+        args: List<PropertyExpression>
+    ): PropertyExpression? {
+        return null
     }
 }
 

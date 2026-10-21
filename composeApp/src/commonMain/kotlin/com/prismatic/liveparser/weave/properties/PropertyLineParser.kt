@@ -9,7 +9,11 @@ data class PropertyLineParseResult(
     val style: String = "",
     val name: String = "",
     val value: String = "",
-    val condition: String = ""
+    val condition: String = "",
+    val lineNumber: Int = -1,
+    val nameRange: IntRange = IntRange.EMPTY,
+    val valueRange: IntRange = IntRange.EMPTY,
+    val conditionRange: IntRange = IntRange.EMPTY,
 )
 
 fun Char.isPropertyNameStartChar() = isLetter() || this == '_'
@@ -34,10 +38,13 @@ fun parsePropertyLine(propertyLine: String): PropertyLineParseResult {
             success = true,
             errorOffset = -1,
             parser.errorType,
-            parser.styleReference,
-            parser.propertyName,
-            parser.propertyValue,
-            parser.condition
+            parser.styleReference.value,
+            parser.propertyName.value,
+            parser.propertyValue.value,
+            parser.condition.value,
+            nameRange = parser.propertyName.range,
+            valueRange = parser.propertyValue.range,
+            conditionRange = parser.condition.range
         )
     } catch( e: StringParser.ParseFailure ) {
         return PropertyLineParseResult(
@@ -49,12 +56,18 @@ fun parsePropertyLine(propertyLine: String): PropertyLineParseResult {
     }
 }
 
+data class ParsedStringFragment(val value: String, val range: IntRange) {
+    companion object {
+        val Empty = ParsedStringFragment("", IntRange.EMPTY)
+    }
+}
+
 private class PropertyLineParser(line: String) : StringParser(line) {
 
-    var propertyName: String = ""
-    var styleReference: String = ""
-    var condition: String = ""
-    var propertyValue: String = ""
+    var propertyName: ParsedStringFragment = ParsedStringFragment.Empty
+    var styleReference: ParsedStringFragment = ParsedStringFragment.Empty
+    var condition: ParsedStringFragment = ParsedStringFragment.Empty
+    var propertyValue: ParsedStringFragment = ParsedStringFragment.Empty
 
     fun parse() {
         skipWhitespace()
@@ -80,7 +93,7 @@ private class PropertyLineParser(line: String) : StringParser(line) {
         }
         expect(':')
         skipWhitespace()
-        propertyValue = remainingText
+        propertyValue = extractRemaining()
     }
 
 }
