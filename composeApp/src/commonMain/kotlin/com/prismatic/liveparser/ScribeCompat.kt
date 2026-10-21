@@ -2,6 +2,7 @@ package com.prismatic.liveparser
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextRange
+import com.prismatic.liveparser.weave.elements.TextElement
 import com.prismatic.liveparser.weave.grammar.LWElement
 import com.prismatic.liveparser.weave.grammar.LineType
 import org.prismatic.opus.math.Vec2
@@ -11,19 +12,18 @@ import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
 
-interface ScribeEntity {
-    val type: LineType
-    companion object {
-        val None = object : ScribeEntity {
-            override val type: LineType = LineType.None
-        }
-    }
+fun LWElement<*>.toMarkdownEntity(): MarkdownEntity = when(this) {
+    is TextElement -> MarkdownEntity.Text(MarkdownPropertiesImpl(
+        parseErrors = emptyList(),
+        range = TextRange(0,0),
+        propRanges = properties.mapValues { TextRange(0,0) },
+        lineRange = 0..0
+    ),text)
+    else -> TODO()
 }
 
-data class LWElementEntity(val element: LWElement<*>, override val type: LineType) : ScribeEntity
-
 @Immutable
-interface MarkdownProperties : ScribeEntity{
+interface MarkdownProperties {
     val range: TextRange
     val propRanges: Map<String,TextRange>
     val parseErrors: List<CodeError>
@@ -48,7 +48,6 @@ interface MarkdownProperties : ScribeEntity{
 
 @Immutable
 private data class MarkdownPropertiesImpl(
-    override val type: LineType,
     override val parseErrors: List<CodeError>,
     override val range: TextRange,
     override val propRanges: Map<String,TextRange>,
@@ -71,7 +70,7 @@ private data class MarkdownPropertiesImpl(
 ): MarkdownProperties
 
 @Immutable
-sealed interface MarkdownEntity : ScribeEntity, MarkdownProperties {
+sealed interface MarkdownEntity : MarkdownProperties {
     data class Style(val props: MarkdownProperties, val styleName: String): MarkdownEntity, MarkdownProperties by props
     data class Code(val props: MarkdownProperties, val code: String): MarkdownEntity, MarkdownProperties by props
     data class CodeSample(val props: MarkdownProperties, val code: String, val codeLanguage: String): MarkdownEntity, MarkdownProperties by props
