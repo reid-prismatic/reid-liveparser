@@ -16,9 +16,9 @@ class CodeBlockElement() : TypedWeaveElement<CodeBlockElement>() {
         private set
 
     override fun makeInstance(): CodeBlockElement  = CodeBlockElement()
-    override val elementTypeName: String get() = "CodeBlock[$codeLanguage]:${code.replace("\n", "\\n")}"
+    override val elementTypeName: String get() = "CodeBlock"
 
-    override fun debugString(): String = "CodeBlock"
+    override fun debugString(): String = "CodeBlock[$codeLanguage]:${code.replace("\n", "\\n")}"
 
     override fun WeaveEntityParseScope.recognize(): Boolean = firstLine.isCodeBlockStart
 

@@ -2,6 +2,7 @@ package com.prismatic.liveparser.weave
 
 import com.prismatic.liveparser.weave.elements.CodeBlockElement
 import com.prismatic.liveparser.weave.elements.MediaElement
+import com.prismatic.liveparser.weave.elements.ScriptingBlockElement
 import com.prismatic.liveparser.weave.elements.SegmentBreakElement
 import com.prismatic.liveparser.weave.elements.StyleElement
 import com.prismatic.liveparser.weave.elements.TargetElement
@@ -16,5 +17,6 @@ val ALL_ELEMENT_TYPES = listOf<TypedWeaveElement<*>>(
     TargetElement(),
     StyleElement(),
     SegmentBreakElement(),
-    CodeBlockElement()
+    CodeBlockElement(),
+    ScriptingBlockElement()
 )

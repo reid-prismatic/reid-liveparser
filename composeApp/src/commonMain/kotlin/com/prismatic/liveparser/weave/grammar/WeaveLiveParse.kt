@@ -8,10 +8,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import com.prismatic.liveparser.LiveParse
 import com.prismatic.liveparser.rememberLiveParse
+import com.prismatic.liveparser.weave.elements.ScriptingBlockElement
 import com.prismatic.liveparser.weave.elements.StyleElement
 
 interface WeaveLiveParse : LiveParse<WeaveLineType, WeaveElement> {
     val styleElements: Map<String, List<StyleElement>>
+    val variableElements: List<ScriptingBlockElement>
 }
 
 class WeaveLiveParseConnection(val textFieldState: TextFieldState) {
@@ -39,4 +41,5 @@ public fun TextFieldState.rememberWeaveLiveParse(): WeaveLiveParse {
 
 private class WeaveLiveParseImpl(private val baseLaveParse : LiveParse<WeaveLineType, WeaveElement>) : WeaveLiveParse, LiveParse<WeaveLineType, WeaveElement> by baseLaveParse {
     override val styleElements: Map<String, List<StyleElement>> by derivedStateOf {baseLaveParse.entities.map { it.entityData }.filterIsInstance<StyleElement>().groupBy { it.styleName }}
+    override val variableElements: List<ScriptingBlockElement> by derivedStateOf {baseLaveParse.entities.map { it.entityData }.filterIsInstance<ScriptingBlockElement>().filter { it.variables.isNotEmpty() }}
 }

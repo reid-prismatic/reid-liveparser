@@ -99,12 +99,30 @@ fun WeaveLiveParseTestUI() {
                 items(liveParse.entities, {it.id}) { entity ->
                     val selected = selectedLine in entity.startLine ..entity.endLine
 
+                    val propExprContext = remember(t) {
+                        SamplePropertyExpressionContext(
+                            duration = 10.seconds,
+                            progress = t,
+                            elementEntity = entity.entityData,
+                            variableProvider = { symbol ->
+                                var value : PropertyExpression? = null
+                                liveParse.variableElements.forEach { el ->
+                                    el.variables[symbol]?.let {value = it}
+                                }
+                                value
+                            }
+//                            variables = liveParse.variableElements.flatMap { el ->
+//                                el.variables.entries.map { it.key to it.value }
+//                            }.toMap()
+                        ).withColorConstructors()
+                    }
+
                     EntityDetails(
-                        entity, t,
+                        entity, t, propExprContext,
                         Modifier
                             .background(if (selected) Color.Yellow else Color.White)
                             .fillMaxWidth(),
-                        styleResolver = { property, propExprContext ->
+                        styleResolver = { property ->
                             resolveStyles(entity.entityData, property, liveParse.styleElements, propExprContext)
                         }
                     )
@@ -119,15 +137,12 @@ fun WeaveLiveParseTestUI() {
 private fun EntityDetails(
     parseEntity: LiveParseEntity<WeaveElement>,
     t: Float,
+    propExprContext: PropertyExpressionContext,
     modifier: Modifier = Modifier,
-    styleResolver: (property: WeaveElement.Prop<*>, propExprContext: PropertyExpressionContext)->ParsedProperty
+    styleResolver: (property: WeaveElement.Prop<*>)->ParsedProperty
 ) {
 
     val element = parseEntity.entityData
-
-    val propExprContext = remember(t) {
-        SamplePropertyExpressionContext(10.seconds, t, element).withColorConstructors()
-    }
 
     ProvideTextStyle(TextStyle(fontSize = 10.sp, lineHeight = 11.sp)) {
         Column(modifier) {
@@ -148,7 +163,7 @@ private fun EntityDetails(
                 Row {
                     val lineNumberStr = if(prop.lineNumber>=0) "(${prop.lineNumber + parseEntity.startLine + 1})" else ""
                     Text( "${prop.key}$lineNumberStr:  ", Modifier.padding(start = 10.dp).width(70.dp), overflow = TextOverflow.Ellipsis, maxLines = 1)
-                    Text(styleResolver(prop, propExprContext).evaluate(propExprContext).toFlatString(), Modifier.clickable {
+                    Text(styleResolver(prop).evaluate(propExprContext).toFlatString(), Modifier.clickable {
                         val newValue = makeEditingTestValue(prop, propExprContext)
                         if(newValue != null) {
                             prop.editValueAsString(newValue)
@@ -207,7 +222,8 @@ private fun makeEditingTestValue(prop: WeaveElement.Prop<*>, propExprContext: Pr
 private class SamplePropertyExpressionContext(
     override val duration: Time = 10.seconds,
     override val progress: Float = 0.5f,
-    val elementEntity: WeaveElement
+    val elementEntity: WeaveElement,
+    val variableProvider: (String)->PropertyExpression?
 ) : PropertyExpressionContext {
 
     override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
@@ -222,7 +238,7 @@ private class SamplePropertyExpressionContext(
         "H4" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h4")
         "Text" -> PropertyExpression.of(elementEntity is TextElement)
         "Voiceover" -> PropertyExpression.of(elementEntity is VoiceoverElement)
-        else -> null
+        else -> variableProvider(symbol)
     }
 
     override fun callFunction(
