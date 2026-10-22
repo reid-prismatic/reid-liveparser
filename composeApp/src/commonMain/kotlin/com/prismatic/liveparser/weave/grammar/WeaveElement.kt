@@ -9,7 +9,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.LiveParseEntityScope
-import com.prismatic.liveparser.matches
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -220,14 +219,15 @@ interface WeaveElement {
     val acceptsOtherProperties : Boolean
     val otherProperties: List<PropertyLine>
 
-    interface CompoundProperty {
+    interface PropInfo {
         val key: String
+        val displayName: String
+    }
+    interface CompoundProperty : PropInfo {
         val components: List<Prop<*>>
     }
 
-    interface Prop<T> {
-        val key: String
-        val displayName: String
+    interface Prop<T> : PropInfo {
         val type: PropertyType
         val multiInstanceAccumulator: PropertyAccumulator?
         val isSpecified: Boolean
@@ -292,9 +292,11 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.CompoundProperty
     }
 
-    private inner class CompoundPropertyImpl(override val components: List<WeaveElement.Prop<*>>, override val key: String) : WeaveElement.CompoundProperty {
-
-    }
+    private inner class CompoundPropertyImpl(
+        override val components: List<WeaveElement.Prop<*>>,
+        override val key: String,
+        override val displayName: String
+    ) : WeaveElement.CompoundProperty
 
     private inner class MultiPropImpl() : MultiPropMember {
         override fun getValue(
@@ -351,45 +353,54 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     }
 
     interface PropertyDefScope {
+        var displayName: String?
+    }
+
+    interface CompoundPropertyDefScope : PropertyDefScope {
+
+    }
+
+    interface SinglePropertyDefScope : PropertyDefScope {
         fun accumulateMultipleInstances(accumulator: PropertyAccumulator)
         fun acceptUnquotedString()
     }
 
-    fun prop(defaultValue: Int, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Float, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Double, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Long, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Time, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Time> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Time), def=def)
-    fun prop(defaultValue: Color, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Color> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Color), def=def)
-    fun prop(defaultValue: String, def:(PropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
-    fun prop(defaultValue: Vec2, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
-    fun prop(defaultValue: Pair<Int,Int>, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
-    fun prop(defaultValue: Vec3, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
-    fun prop(defaultValue: Vec4, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
-    fun prop(defaultValue: FrameRate, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
-    fun prop(defaultValue: WeaveDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
+    fun prop(defaultValue: Int, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Float, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Double, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Long, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Time, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Time> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Time), def=def)
+    fun prop(defaultValue: Color, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Color> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Color), def=def)
+    fun prop(defaultValue: String, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
+    fun prop(defaultValue: Vec2, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
+    fun prop(defaultValue: Pair<Int,Int>, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
+    fun prop(defaultValue: Vec3, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
+    fun prop(defaultValue: Vec4, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
+    fun prop(defaultValue: FrameRate, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
+    fun prop(defaultValue: WeaveDimension, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
     fun otherProps(): MultiPropProvider {
         check(!acceptsOtherProperties)
         acceptsOtherProperties = true
         return multiPropProvider()
     }
-    fun prop(defaultValue: FontWeight, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
+    fun prop(defaultValue: FontWeight, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
         propProvider(defaultValue, type = PropertyType.Alternate(
             PropertyType.UnquotedStringEnum("Thin","ExtraLight","Light","Normal","Medium","SemiBold","Bold","ExtraBold","Black"),
             PropertyType.TypedExpression(PropertyDataType.Integer)
         ), def=def)
-    fun prop(defaultValue: FontStyle, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
-    fun prop(vararg components: WeaveElement.Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList())
+    fun prop(defaultValue: FontStyle, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
+    fun prop(vararg components: WeaveElement.Prop<*>, def:(CompoundPropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList(), def)
 
     fun compoundPropProvider(
         components: List<WeaveElement.Prop<*>>,
+        def:(CompoundPropertyDefScope.()->Unit)?
     ) : CompoundPropProvider {
-        return object : CompoundPropProvider {
+        return object : CompoundPropProvider, CompoundPropertyDefScope {
             override fun provideDelegate(
                 thisRef: Any?,
                 prop: KProperty<*>
             ): CompoundPropMember {
-                val compoundProp : WeaveElement.CompoundProperty = CompoundPropertyImpl(components, prop.name)
+                val compoundProp : WeaveElement.CompoundProperty = CompoundPropertyImpl(components, prop.name, displayName ?: prop.name)
                 compoundPropertyList += compoundProp
                 return object : CompoundPropMember {
                     override fun getValue(thisRef: Any?, property: KProperty<*>) : WeaveElement.CompoundProperty {
@@ -397,6 +408,7 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
                     }
                 }
             }
+            override var displayName: String? = null
         }
     }
 
@@ -415,14 +427,14 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     fun <T> propProvider(
         defaultValue: T,
         key: String? = null,
-        displayName: String? = null,
         type: PropertyType,
-        def:(PropertyDefScope.()->Unit)?
+        def:(SinglePropertyDefScope.()->Unit)?
 //        parser: (String) -> T?
     ) : PropProvider<T> {
-        return object : PropProvider<T>, PropertyDefScope {
+        return object : PropProvider<T>, SinglePropertyDefScope {
             var multiInstanceAccumulator: PropertyAccumulator? = null
             var acceptUnquotedString = false
+            override var displayName: String? = null
             override fun accumulateMultipleInstances(accumulator: PropertyAccumulator) {
                 check(multiInstanceAccumulator==null)
                 multiInstanceAccumulator = accumulator
