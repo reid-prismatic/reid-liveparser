@@ -14,6 +14,10 @@ class TargetElement() : DefinitionElement<TargetElement>(
     var targetName by mutableStateOf("")
     val ratio by prop(16 to 9)
     val frameRate by prop(30.fps)
+    val outputResolution by prop(1080)
+    val outputFrameRate by prop(30.fps)
+    val outputRatio by prop(16 to 9)
+    val output by prop(outputResolution, outputRatio, outputFrameRate)
     override fun parseArguments(arguments: String) {
         targetName = arguments
     }

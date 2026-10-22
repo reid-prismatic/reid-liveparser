@@ -446,6 +446,8 @@ internal class PropertyExpressionParser(
         val error: PropertyExpressionParseException? = null,
     )
 
+    private val Token.isIntegerLiteral : Boolean get() = literal is PropertyExpression.IntegerLiteral
+
     companion object {
         /**
          * How deep an expression may go. It limits both the parser's recursion and the depth of the tree that is
@@ -979,6 +981,11 @@ internal class PropertyExpressionParser(
 
     /** The literal that the text starts with, looking past any opening parentheses and signs in front of it. */
     fun leadingLiteral(): PropertyExpression? = tokens[leadingIndex()].literal
+
+    fun hasLeadingRatio() : Boolean {
+        val index = leadingIndex()
+        return tokens[index].isIntegerLiteral && tokens[index + 1].kind == Kind.COLON && tokens[index + 2].isIntegerLiteral
+    }
 
     /** Why the text cannot be read at the place where [leadingLiteral] looks, if that is the case. */
     fun leadingError(): PropertyExpressionParseException? = tokens[leadingIndex()].error

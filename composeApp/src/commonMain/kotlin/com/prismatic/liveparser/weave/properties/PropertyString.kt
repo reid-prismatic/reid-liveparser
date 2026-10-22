@@ -856,6 +856,10 @@ private class PropertyStringParser(private val input: String) {
     private fun startsLike(type: PropertyType, parser: PropertyExpressionParser): Boolean =
         if (type == PropertyType.Dimension) {
             parser.leadingLiteral() is PropertyExpression.DimensionLiteral
+        } else if( type is PropertyType.TypedExpression && type.expectedType == PropertyDataType.Ratio ) {
+            parser.hasLeadingRatio()
+        } else if( type is PropertyType.TypedExpression ) {
+            parser.startsExpression() && !parser.hasLeadingRatio() && parser.leadingLiteral().let { it==null || it.isOf(type.expectedType) }
         } else {
             parser.startsExpression()
         }
@@ -885,6 +889,7 @@ private class PropertyStringParser(private val input: String) {
         is PropertyExpression.Variable -> false
         is PropertyExpression.FunctionCall -> true
         is PropertyExpression.Unary -> isEvident(expression.operand, expected)
+        is PropertyExpression.Binary if expression.operator == PropertyExpression.BinaryOperator.RATIO -> expected == PropertyDataType.Ratio
         is PropertyExpression.Binary -> hasLiteralOrCall(expression)
         is PropertyExpression.Vector -> expression.components.all { isEvident(it, expected) }
         is PropertyExpression.Animation -> expression.keyframes.all { isEvident(it.value, expected) }

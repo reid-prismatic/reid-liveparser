@@ -61,43 +61,41 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
                 PropertyType.Optional(it.type)
             })
             val compoundParseResult = parsePropertyStringHandlingErrors(parseResult.value, compoundType)
-            if(compoundParseResult !is ParsedProperty.Compound)
-                throw IllegalStateException()
+            if(compoundParseResult is ParsedProperty.Compound && compoundParseResult.components.size == compoundProperty.components.size ) {
 
-            val actual = compoundParseResult.components
-            val requested = compoundProperty.components
+                val actual = compoundParseResult.components
+                val requested = compoundProperty.components
 
-            if( actual.size != requested.size ) throw IllegalStateException()
-
-            requested.forEachIndexed { index, prop ->
-                val actualValue = actual[index]?.resolveToPropertyExpression()
-                if(actualValue != null) {
-                    val name = prop.key
-                    val targetProperty = match.properties[name]
-                    val compoundParseResult = parseResult.copy(
-                        value = parseResult.value.substring(actualValue.sourceRange),
-                        valueRange = actualValue.sourceRange
-                    )
-                    if( targetProperty != null ) {
-                        if(parseResult.condition.isNotBlank()) {
-                            // TODO: Error, property conditions not allow except in style definitions
-                        }
-                        if(targetProperty.multiInstanceAccumulator!=null) {
-                            props.getOrPut(name,{mutableListOf()}).add(compoundParseResult)
+                requested.forEachIndexed { index, prop ->
+                    val actualValue = actual[index]?.resolveToPropertyExpression()
+                    if (actualValue != null) {
+                        val name = prop.key
+                        val targetProperty = match.properties[name]
+                        val compoundParseResult = parseResult.copy(
+                            value = parseResult.value.substring(actualValue.sourceRange),
+                            valueRange = actualValue.sourceRange
+                        )
+                        if (targetProperty != null) {
+                            if (parseResult.condition.isNotBlank()) {
+                                // TODO: Error, property conditions not allow except in style definitions
+                            }
+                            if (targetProperty.multiInstanceAccumulator != null) {
+                                props.getOrPut(name, { mutableListOf() }).add(compoundParseResult)
+                            } else {
+                                props.getOrPut(name, { mutableListOf() }).apply {
+                                    clear()
+                                    add(compoundParseResult)
+                                }
+                            }
                         } else {
-                            props.getOrPut(name,{mutableListOf()}).apply {
-                                clear()
-                                add(compoundParseResult)
+                            if (match.acceptsOtherProperties) {
+                                otherProps.getOrPut(name, { mutableListOf() }).add(compoundParseResult)
+                            } else {
+                                // TODO: Error, unrecognized property
                             }
                         }
-                    } else {
-                        if( match.acceptsOtherProperties ) {
-                            otherProps.getOrPut(name,{mutableListOf()}).add(compoundParseResult)
-                        } else {
-                            // TODO: Error, unrecognized property
-                        }
-                    }
 
+                    }
                 }
             }
             println(compoundType)
