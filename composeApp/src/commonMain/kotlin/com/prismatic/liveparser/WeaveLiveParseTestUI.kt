@@ -1,6 +1,7 @@
 package com.prismatic.liveparser
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -32,11 +34,16 @@ import com.prismatic.liveparser.weave.elements.TextElement
 import com.prismatic.liveparser.weave.elements.VoiceoverElement
 import com.prismatic.liveparser.weave.grammar.*
 import com.prismatic.liveparser.weave.properties.ParsedProperty
+import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
+import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.toFlatString
+import com.prismatic.liveparser.weave.properties.toVec2OrNull
+import com.prismatic.liveparser.weave.properties.toWeaveDimensionOrNull
 import com.prismatic.liveparser.weave.styles.resolveStyles
+import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.time.Time
 import org.prismatic.opus.time.seconds
 
@@ -137,17 +144,22 @@ private fun EntityDetails(
                 }
                 HorizontalDivider()
             }
-            element.properties.forEach { prop ->
+            element.properties.forEach { (name,prop) ->
                 Row {
-                    val lineNumberStr = if(prop.value.lineNumber>=0) "(${prop.value.lineNumber + parseEntity.startLine + 1})" else ""
-                    Text( "${prop.key}$lineNumberStr:  ", Modifier.padding(start = 10.dp).width(70.dp))
-                    Text(styleResolver(prop.value, propExprContext).evaluate(propExprContext).toFlatString())
+                    val lineNumberStr = if(prop.lineNumber>=0) "(${prop.lineNumber + parseEntity.startLine + 1})" else ""
+                    Text( "${prop.key}$lineNumberStr:  ", Modifier.padding(start = 10.dp).width(70.dp), overflow = TextOverflow.Ellipsis, maxLines = 1)
+                    Text(styleResolver(prop, propExprContext).evaluate(propExprContext).toFlatString(), Modifier.clickable {
+                        val newValue = makeEditingTestValue(prop, propExprContext)
+                        if(newValue != null) {
+                            prop.editValueAsString(newValue)
+                        }
+                    })
                 }
             }
             if (element.acceptsOtherProperties && element.otherProperties.isNotEmpty()) {
                 HorizontalDivider()
                 element.otherProperties.forEach { prop ->
-                    Text(prop.name + ":  ", Modifier.padding(start = 10.dp).width(70.dp))
+                    Text(prop.name + ":  ", Modifier.padding(start = 10.dp).width(70.dp), overflow = TextOverflow.Ellipsis, maxLines = 1)
                     Text(prop.value.evaluate(PropertyExpressionContext.Empty).toFlatString())
                 }
             }
@@ -155,6 +167,41 @@ private fun EntityDetails(
     }
 
 
+}
+
+private fun makeEditingTestValue(prop: WeaveElement.Prop<*>, propExprContext: PropertyExpressionContext) : String? {
+    if(prop.type == PropertyType.TypedExpression(PropertyDataType.Vec2)) {
+        val prevValue = prop.parsedProperty.evaluate(propExprContext).toVec2OrNull()
+        if( prevValue != null ) {
+            val newValue = Vec2(prevValue.x * 2f, prevValue.y * 3f)
+            return "${newValue.x.toStringAsFixed(3)}, ${newValue.y.toStringAsFixed(3)}"
+        }
+    } else if(prop.type == PropertyType.TypedExpression(PropertyDataType.Dimension)) {
+        val prevValue = prop.parsedProperty.evaluate(propExprContext).toWeaveDimensionOrNull()
+        if( prevValue is WeaveDimension.Points ) {
+            val prevPoints = prevValue.value
+            val newPoints = when {
+                prevPoints < 8 -> 8
+                prevPoints < 10 -> 10
+                prevPoints < 12 -> 12
+                prevPoints < 14 -> 14
+                prevPoints < 16 -> 16
+                prevPoints < 18 -> 18
+                prevPoints < 20 -> 20
+                prevPoints < 24 -> 24
+                prevPoints < 28 -> 28
+                prevPoints < 32 -> 32
+                prevPoints < 36 -> 36
+                prevPoints < 40 -> 40
+                prevPoints < 48 -> 48
+                prevPoints < 54 -> 54
+                prevPoints < 60 -> 60
+                else -> 8
+            }
+            return "${newPoints}pt"
+        }
+    }
+    return null
 }
 
 private class SamplePropertyExpressionContext(

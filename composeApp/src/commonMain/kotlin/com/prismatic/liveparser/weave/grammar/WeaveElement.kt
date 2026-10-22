@@ -7,8 +7,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.prismatic.liveparser.EntityId
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.LiveParseEntityScope
+import com.prismatic.liveparser.offsetToStartOfLine
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -33,11 +35,13 @@ import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): WeaveElement {
+fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(liveParseConnection: WeaveLiveParseConnection): WeaveElement {
     val scope = WeaveEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
     val match = matches.singleOrNull() ?: return ErrorElement()
     val inst: TypedWeaveElement<*> = (existingEntityData as? TypedWeaveElement<*>) ?: match.makeInstance()
+    inst.liveParseConnection = liveParseConnection
+    inst.entityId = entityId
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
 //    val propLines = entityLines.drop(bodyLines.size).filter { it.isNotBlank() }
     val props = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
@@ -72,7 +76,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
                         val targetProperty = match.properties[name]
                         val compoundParseResult = parseResult.copy(
                             value = parseResult.value.substring(actualValue.sourceRange),
-                            valueRange = actualValue.sourceRange
+                            valueRange = (actualValue.sourceRange.first + parseResult.valueRange.first)..(actualValue.sourceRange.last + parseResult.valueRange.first)
                         )
                         if (targetProperty != null) {
                             if (parseResult.condition.isNotBlank()) {
@@ -97,8 +101,6 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
                     }
                 }
             }
-            println(compoundType)
-            println("compoundParseResult: $compoundParseResult")
         } else if( targetProperty == null ) {
             if( match.acceptsOtherProperties ) {
                 otherProps.getOrPut(key,{mutableListOf()}).add(parseResult)
@@ -234,6 +236,8 @@ interface WeaveElement {
         fun update(value: ParsedProperty?, lineNumber: Int = -1, nameRange: IntRange = IntRange.EMPTY, valueRange: IntRange = IntRange.EMPTY)
         val parsedProperty: ParsedProperty
         val lineNumber: Int // Line number relative to start of entity
+        fun editValue(newValue: T)
+        fun editValueAsString(newValue: String)
         val conditionRange: IntRange
         val nameRange: IntRange
         val valueRange: IntRange
@@ -244,6 +248,9 @@ interface WeaveElement {
 
 }
 abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
+
+    var liveParseConnection: WeaveLiveParseConnection? = null
+    var entityId: EntityId = EntityId.None
 
     abstract fun makeInstance() : T
 
@@ -295,7 +302,7 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     private inner class CompoundPropertyImpl(
         override val components: List<WeaveElement.Prop<*>>,
         override val key: String,
-        override val displayName: String
+        override val displayName: String,
     ) : WeaveElement.CompoundProperty
 
     private inner class MultiPropImpl() : MultiPropMember {
@@ -335,6 +342,22 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
             private set
         override var valueRange: IntRange = IntRange.EMPTY
             private set
+
+        override fun editValue(newValue: T) = editValueAsString(PropertyExpression.of(newValue).toFlatString())
+
+        override fun editValueAsString(newValue: String) {
+            val propEntity = liveParseConnection?.weaveLiveParse?.entities?.firstOrNull { it.id == entityId } ?: return
+            val tfs = liveParseConnection?.textFieldState ?: return
+            val lineStart = tfs.text.offsetToStartOfLine(propEntity.startLine + lineNumber)
+            if( lineStart < 0 ) return
+            if( valueRange.isEmpty() ) {
+                // TODO: Create property
+                return
+            }
+            tfs.edit {
+                replace(lineStart + valueRange.first, lineStart + valueRange.last+1, newValue)
+            }
+        }
 
         override val isSpecified: Boolean get() = propValue != null
         override fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T> = this@PropImpl
@@ -409,7 +432,7 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
                 }
             }
             override var displayName: String? = null
-        }
+        }.also{def?.invoke(it)}
     }
 
     fun multiPropProvider() : MultiPropProvider {

@@ -61,3 +61,15 @@ public inline fun CharSequence.countInSubsequence(startIndex: Int = 0, endIndex:
     }
     return count
 }
+
+public inline fun CharSequence.offsetToStartOfLine(lineNumber: Int) : Int {
+    if( lineNumber <= 0) return 0
+    var n = 0
+    this.forEachIndexed { i, ch ->
+        if(ch == '\n') {
+            ++n
+            if(n == lineNumber) return i+1
+        }
+    }
+    return -1
+}

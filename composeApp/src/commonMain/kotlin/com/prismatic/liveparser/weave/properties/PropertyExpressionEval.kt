@@ -3,7 +3,11 @@ package com.prismatic.liveparser.weave.properties
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.Color
+import com.prismatic.liveparser.WeaveDimension
+import com.prismatic.liveparser.mm
+import com.prismatic.liveparser.pt
 import com.prismatic.liveparser.weave.properties.PropertyExpression.*
+import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Micros
 import org.prismatic.opus.time.Millis
@@ -64,6 +68,31 @@ fun PropertyExpression.toIntOrNull() : Int? = when (this) {
     is IntegerLiteral -> this.value.toInt()
     is NumberLiteral -> this.value.toInt()
     else -> null
+}
+
+fun ParsedProperty.toVec2OrNull() = (this as? PropertyExpression)?.toVec2OrNull()
+
+fun PropertyExpression.toVec2OrNull() : Vec2? {
+    if( this !is Vector )
+        return null
+    if( components.size != 2 )
+        return null
+    val x = components[0].toFloatOrNull() ?: return null
+    val y = components[1].toFloatOrNull() ?: return null
+    return Vec2(x,y)
+}
+
+fun ParsedProperty.toWeaveDimensionOrNull() = (this as? PropertyExpression)?.toWeaveDimensionOrNull()
+
+fun PropertyExpression.toWeaveDimensionOrNull() : WeaveDimension? {
+    if( this !is DimensionLiteral )
+        return null
+    return when(this.unit) {
+        DimensionUnit.POINT -> this.value.toFloat().pt
+        DimensionUnit.CENTIMETER -> null
+        DimensionUnit.MILLIMETER -> this.value.toFloat().mm
+        DimensionUnit.INCH -> null
+    }
 }
 
 fun ParsedProperty.toBoolOrNull() : Boolean? = when (this) {
