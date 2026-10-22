@@ -913,29 +913,6 @@ private class PropertyStringParser(private val input: String) {
         else -> expression.isOf(expected)
     }
 
-    /**
-     * Whether this literal is of the kind that an expression has which is expected to be of [type]. Whether a
-     * number is written as an integer is not held against it: `700.0` is as much a number as `700`.
-     */
-    private fun PropertyExpression.isOf(type: PropertyDataType?): Boolean = when (type) {
-        null -> true
-        PropertyDataType.Integer, PropertyDataType.Number ->
-            this is PropertyExpression.IntegerLiteral || this is PropertyExpression.NumberLiteral
-        PropertyDataType.Time -> this is PropertyExpression.TimeLiteral
-        PropertyDataType.Dimension -> this is PropertyExpression.DimensionLiteral
-        PropertyDataType.Color -> this is PropertyExpression.ColorLiteral
-        PropertyDataType.String -> this is PropertyExpression.StringLiteral
-        PropertyDataType.Percent -> this is PropertyExpression.PercentageLiteral
-        PropertyDataType.SemanticTag -> this is PropertyExpression.SemanticTag
-        PropertyDataType.Boolean -> this is PropertyExpression.BooleanLiteral
-        PropertyDataType.Char -> this is PropertyExpression.StringLiteral && (value.length == 1 || value.isEmpty())
-        PropertyDataType.Vec2 -> this is PropertyExpression.Vector && this.components.size==2 && this.isLiteralSubexpression
-        PropertyDataType.Vec3 -> this is PropertyExpression.Vector && this.components.size==3 && this.isLiteralSubexpression
-        PropertyDataType.Vec4 -> this is PropertyExpression.Vector && this.components.size==4 && this.isLiteralSubexpression
-        PropertyDataType.Ratio -> this is PropertyExpression.RatioLiteral
-        PropertyDataType.FrameRate -> this is PropertyExpression.FrameRateLiteral
-    }
-
     /** Notes that the text at [start] does not start an expression of [type]. */
     private fun notAnExpression(type: PropertyType, parser: PropertyExpressionParser, start: Int): Boolean {
         val unreadable = parser.leadingError()
@@ -1409,4 +1386,27 @@ private class PropertyStringParser(private val input: String) {
 
     private fun stringLiteral(text: String, start: Int, end: Int): PropertyExpression =
         PropertyExpression.StringLiteral(text).apply { sourceRange = start until end }
+}
+
+/**
+ * Whether this literal is of the kind that an expression has which is expected to be of [type]. Whether a
+ * number is written as an integer is not held against it: `700.0` is as much a number as `700`.
+ */
+fun PropertyExpression.isOf(type: PropertyDataType?): Boolean = when (type) {
+    null -> true
+    PropertyDataType.Integer, PropertyDataType.Number ->
+        this is PropertyExpression.IntegerLiteral || this is PropertyExpression.NumberLiteral
+    PropertyDataType.Time -> this is PropertyExpression.TimeLiteral
+    PropertyDataType.Dimension -> this is PropertyExpression.DimensionLiteral
+    PropertyDataType.Color -> this is PropertyExpression.ColorLiteral
+    PropertyDataType.String -> this is PropertyExpression.StringLiteral
+    PropertyDataType.Percent -> this is PropertyExpression.PercentageLiteral
+    PropertyDataType.SemanticTag -> this is PropertyExpression.SemanticTag
+    PropertyDataType.Boolean -> this is PropertyExpression.BooleanLiteral
+    PropertyDataType.Char -> this is PropertyExpression.StringLiteral && (value.length == 1 || value.isEmpty())
+    PropertyDataType.Vec2 -> this is PropertyExpression.Vector && this.components.size==2 && this.isLiteralSubexpression
+    PropertyDataType.Vec3 -> this is PropertyExpression.Vector && this.components.size==3 && this.isLiteralSubexpression
+    PropertyDataType.Vec4 -> this is PropertyExpression.Vector && this.components.size==4 && this.isLiteralSubexpression
+    PropertyDataType.Ratio -> this is PropertyExpression.RatioLiteral
+    PropertyDataType.FrameRate -> this is PropertyExpression.FrameRateLiteral
 }

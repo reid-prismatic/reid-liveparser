@@ -5,6 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import com.prismatic.liveparser.weave.properties.ParsedProperty
+import com.prismatic.liveparser.weave.properties.PropertyDataType
+import com.prismatic.liveparser.weave.properties.PropertyExpression
+import com.prismatic.liveparser.weave.properties.PropertyType
+import com.prismatic.liveparser.weave.properties.isOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.collections.forEachIndexed
@@ -299,3 +304,24 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
     }
 }
 
+private fun parsedPropertyTypeMatches(property: ParsedProperty, type: PropertyType): Boolean {
+    val propExpr = when(property) {
+        is ParsedProperty.Alternate, is ParsedProperty.Compound, is ParsedProperty.Error -> return false
+        is PropertyExpression -> property
+    }
+    return when(type) {
+        is PropertyType.TypedExpression -> propExpr.isOf(type.expectedType)
+        is PropertyType.Alternate -> type.components.any { parsedPropertyTypeMatches(propExpr, it) }
+        is PropertyType.Compound -> false
+        PropertyType.Dimension -> propExpr.isOf(PropertyDataType.Dimension)
+        PropertyType.Expression -> true
+        is PropertyType.Optional -> parsedPropertyTypeMatches(propExpr, type.type)
+        is PropertyType.UnquotedStringEnum -> propExpr.isOf(PropertyDataType.String)
+        PropertyType.UnquotedStringLiteral -> propExpr.isOf(PropertyDataType.String)
+    }
+}
+
+fun PropertyType.matches(actual: ParsedProperty?) : Boolean{
+    if(actual == null) return false
+    return parsedPropertyTypeMatches(actual, this)
+}

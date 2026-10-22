@@ -23,7 +23,9 @@ class TextElement() : ConcreteElement<TextElement>(
     var text : String by mutableStateOf("")
 
     val fontSize by prop(12.pt)
-    val typeface by prop("")
+    val typeface by prop("") {
+        acceptUnquotedString()
+    }
     val weight by prop(FontWeight.Bold)
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)

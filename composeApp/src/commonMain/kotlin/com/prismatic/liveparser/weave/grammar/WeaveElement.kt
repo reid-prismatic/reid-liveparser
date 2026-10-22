@@ -9,6 +9,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.LiveParseEntityScope
+import com.prismatic.liveparser.matches
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -56,9 +57,50 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
         } else if( parseResult.target.isNotBlank() ) {
             targets += parseResult.target
         } else if( targetProperty == null && compoundProperty!=null ) {
-            val compoundParseResult = parsePropertyStringHandlingErrors(parseResult.value, PropertyType.Compound(compoundProperty.components.map {
+            val compoundType = PropertyType.Compound(compoundProperty.components.map {
                 PropertyType.Optional(it.type)
-            }))
+            })
+            val compoundParseResult = parsePropertyStringHandlingErrors(parseResult.value, compoundType)
+            if(compoundParseResult !is ParsedProperty.Compound)
+                throw IllegalStateException()
+
+            val actual = compoundParseResult.components
+            val requested = compoundProperty.components
+
+            if( actual.size != requested.size ) throw IllegalStateException()
+
+            requested.forEachIndexed { index, prop ->
+                val actualValue = actual[index]?.resolveToPropertyExpression()
+                if(actualValue != null) {
+                    val name = prop.key
+                    val targetProperty = match.properties[name]
+                    val compoundParseResult = parseResult.copy(
+                        value = parseResult.value.substring(actualValue.sourceRange),
+                        valueRange = actualValue.sourceRange
+                    )
+                    if( targetProperty != null ) {
+                        if(parseResult.condition.isNotBlank()) {
+                            // TODO: Error, property conditions not allow except in style definitions
+                        }
+                        if(targetProperty.multiInstanceAccumulator!=null) {
+                            props.getOrPut(name,{mutableListOf()}).add(compoundParseResult)
+                        } else {
+                            props.getOrPut(name,{mutableListOf()}).apply {
+                                clear()
+                                add(compoundParseResult)
+                            }
+                        }
+                    } else {
+                        if( match.acceptsOtherProperties ) {
+                            otherProps.getOrPut(name,{mutableListOf()}).add(compoundParseResult)
+                        } else {
+                            // TODO: Error, unrecognized property
+                        }
+                    }
+
+                }
+            }
+            println(compoundType)
             println("compoundParseResult: $compoundParseResult")
         } else if( targetProperty == null ) {
             if( match.acceptsOtherProperties ) {
@@ -312,6 +354,7 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
 
     interface PropertyDefScope {
         fun accumulateMultipleInstances(accumulator: PropertyAccumulator)
+        fun acceptUnquotedString()
     }
 
     fun prop(defaultValue: Int, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
@@ -381,9 +424,14 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     ) : PropProvider<T> {
         return object : PropProvider<T>, PropertyDefScope {
             var multiInstanceAccumulator: PropertyAccumulator? = null
+            var acceptUnquotedString = false
             override fun accumulateMultipleInstances(accumulator: PropertyAccumulator) {
                 check(multiInstanceAccumulator==null)
                 multiInstanceAccumulator = accumulator
+            }
+
+            override fun acceptUnquotedString() {
+                acceptUnquotedString = true
             }
             override fun provideDelegate(
                 thisRef: Any?,
@@ -393,7 +441,10 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
                     defaultValue = defaultValue,
                     key = key ?: prop.name,
                     displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
-                    type = type,
+                    type = when {
+                        acceptUnquotedString -> PropertyType.Alternate(PropertyType.UnquotedStringLiteral, type)
+                        else -> type
+                    },
                     multiInstanceAccumulator = multiInstanceAccumulator
 //                    parser = parser
                 )
@@ -459,4 +510,11 @@ inline fun <reified T> inferPropertyType() : PropertyType {
             return PropertyType.TypedExpression(PropertyDataType.Dimension)
         else -> throw IllegalArgumentException("Unsupported type")
     }
+}
+
+fun ParsedProperty.resolveToPropertyExpression() : PropertyExpression? = when(this) {
+    is ParsedProperty.Alternate -> value?.resolveToPropertyExpression()
+    is ParsedProperty.Compound -> components.firstNotNullOfOrNull { it?.resolveToPropertyExpression() }
+    is ParsedProperty.Error -> default?.resolveToPropertyExpression() ?: PropertyExpression.of(error)
+    is PropertyExpression -> this
 }
