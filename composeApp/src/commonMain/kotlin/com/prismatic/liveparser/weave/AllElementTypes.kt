@@ -6,9 +6,9 @@ import com.prismatic.liveparser.weave.elements.StyleElement
 import com.prismatic.liveparser.weave.elements.TargetElement
 import com.prismatic.liveparser.weave.elements.TextElement
 import com.prismatic.liveparser.weave.elements.VoiceoverElement
-import com.prismatic.liveparser.weave.grammar.LWElement
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 
-val ALL_ELEMENT_TYPES = listOf<LWElement<*>>(
+val ALL_ELEMENT_TYPES = listOf<TypedWeaveElement<*>>(
     TextElement(),
     VoiceoverElement(),
     MediaElement(),

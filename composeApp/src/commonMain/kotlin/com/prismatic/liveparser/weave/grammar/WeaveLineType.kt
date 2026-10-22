@@ -1,13 +1,13 @@
 package com.prismatic.liveparser.weave.grammar
 
-import com.prismatic.liveparser.LiveParseLineContext
+import com.prismatic.liveparser.LiveParseLineType
 
-enum class LineType(override val isBlockStart: Boolean = false) : LiveParseLineContext {
+enum class WeaveLineType(override val isEntityStart: Boolean = false) : LiveParseLineType {
     None,
     Blank,
     ConcreteEntityStart(true),
     ConcreteEntityBody,
-    DelayEntityStart(isBlockStart = true),
+    DelayEntityStart(true),
     Property,
     DefinitionEntityStart(true),
     DefinitionEntityBody,
@@ -21,54 +21,54 @@ enum class LineType(override val isBlockStart: Boolean = false) : LiveParseLineC
     SegmentBreak(true),
 }
 
-fun getLineType( line: String, prevLineType: LineType = LineType.None): LineType {
+fun getWeaveLineType(line: String, prevLineType: WeaveLineType = WeaveLineType.None): WeaveLineType {
     return when(prevLineType) {
-        LineType.None, LineType.SegmentBreak -> when(val type = line.decomposeLine().contextFreeType) {
-                LineType.Blank -> LineType.None
-                LineType.Property -> LineType.SyntaxError
+        WeaveLineType.None, WeaveLineType.SegmentBreak -> when(val type = line.decomposeLine().contextFreeLineType) {
+                WeaveLineType.Blank -> WeaveLineType.None
+                WeaveLineType.Property -> WeaveLineType.SyntaxError
                 else -> type
             }
-        LineType.SyntaxError -> when {
-            line.decomposeLine().isBlankLine -> LineType.None
-            else -> LineType.SyntaxError
+        WeaveLineType.SyntaxError -> when {
+            line.decomposeLine().isBlankLine -> WeaveLineType.None
+            else -> WeaveLineType.SyntaxError
         }
-        LineType.Blank, LineType.ScriptEnd, LineType.CodeEnd -> line.decomposeLine().contextFreeType
-        LineType.ConcreteEntityStart, LineType.ConcreteEntityBody, LineType.DelayEntityStart -> {
+        WeaveLineType.Blank, WeaveLineType.ScriptEnd, WeaveLineType.CodeEnd -> line.decomposeLine().contextFreeLineType
+        WeaveLineType.ConcreteEntityStart, WeaveLineType.ConcreteEntityBody, WeaveLineType.DelayEntityStart -> {
             val decomposed = line.decomposeLine()
             when {
-                decomposed.isBlankLine -> LineType.Blank
-                decomposed.isPropertyLine -> LineType.Property
-                else -> LineType.ConcreteEntityBody
+                decomposed.isBlankLine -> WeaveLineType.Blank
+                decomposed.isPropertyLine -> WeaveLineType.Property
+                else -> WeaveLineType.ConcreteEntityBody
             }
         }
-        LineType.Property -> {
+        WeaveLineType.Property -> {
             val decomposed = line.decomposeLine()
             when {
-                decomposed.isBlankLine -> LineType.Blank
-                decomposed.isPropertyLine -> LineType.Property
-                else -> LineType.SyntaxError
+                decomposed.isBlankLine -> WeaveLineType.Blank
+                decomposed.isPropertyLine -> WeaveLineType.Property
+                else -> WeaveLineType.SyntaxError
             }
         }
-        LineType.DefinitionEntityStart, LineType.DefinitionEntityBody -> {
+        WeaveLineType.DefinitionEntityStart, WeaveLineType.DefinitionEntityBody -> {
             val decomposed = line.decomposeLine()
             when {
-                decomposed.isBlankLine -> LineType.Blank
-                decomposed.isPropertyLine -> LineType.Property
-                else -> LineType.DefinitionEntityBody
+                decomposed.isBlankLine -> WeaveLineType.Blank
+                decomposed.isPropertyLine -> WeaveLineType.Property
+                else -> WeaveLineType.DefinitionEntityBody
             }
         }
-        LineType.CodeStart, LineType.CodeContinue -> {
+        WeaveLineType.CodeStart, WeaveLineType.CodeContinue -> {
             val decomposed = line.decomposeLine()
             when {
-                decomposed.isCodeBlockEnd -> LineType.CodeEnd
-                else -> LineType.CodeContinue
+                decomposed.isCodeBlockEnd -> WeaveLineType.CodeEnd
+                else -> WeaveLineType.CodeContinue
             }
         }
-        LineType.ScriptStart, LineType.ScriptContinue -> {
+        WeaveLineType.ScriptStart, WeaveLineType.ScriptContinue -> {
             val decomposed = line.decomposeLine()
             when {
-                decomposed.isScriptEnd -> LineType.ScriptEnd
-                else -> LineType.ScriptContinue
+                decomposed.isScriptEnd -> WeaveLineType.ScriptEnd
+                else -> WeaveLineType.ScriptContinue
             }
         }
     }
@@ -108,21 +108,21 @@ val textEntityPrefixes = mapOf<String,String>(
     "##### " to "h5",
 )
 
-val DecomposedLine.contextFreeType get() = when {
-    isBlankLine -> LineType.Blank
-    isConcreteEntityStart -> LineType.ConcreteEntityStart
-    isDefinitionEntityStart -> LineType.DefinitionEntityStart
-    isStyleEntityStart -> LineType.DefinitionEntityStart
-    isScriptStart -> LineType.ScriptStart
-    isScriptEnd -> LineType.ScriptEnd
-    isCodeBlockStart -> LineType.CodeStart
-    isCodeBlockEnd -> LineType.CodeEnd
-    isDelayEntityStart -> LineType.DelayEntityStart
-    isPropertyLine -> LineType.Property
-    isTextEntityStart -> LineType.ConcreteEntityStart
-    isVoiceoverEntityStart -> LineType.ConcreteEntityStart
-    isSegmentBreak -> LineType.SegmentBreak
-    else -> LineType.SyntaxError
+val DecomposedLine.contextFreeLineType get() = when {
+    isBlankLine -> WeaveLineType.Blank
+    isConcreteEntityStart -> WeaveLineType.ConcreteEntityStart
+    isDefinitionEntityStart -> WeaveLineType.DefinitionEntityStart
+    isStyleEntityStart -> WeaveLineType.DefinitionEntityStart
+    isScriptStart -> WeaveLineType.ScriptStart
+    isScriptEnd -> WeaveLineType.ScriptEnd
+    isCodeBlockStart -> WeaveLineType.CodeStart
+    isCodeBlockEnd -> WeaveLineType.CodeEnd
+    isDelayEntityStart -> WeaveLineType.DelayEntityStart
+    isPropertyLine -> WeaveLineType.Property
+    isTextEntityStart -> WeaveLineType.ConcreteEntityStart
+    isVoiceoverEntityStart -> WeaveLineType.ConcreteEntityStart
+    isSegmentBreak -> WeaveLineType.SegmentBreak
+    else -> WeaveLineType.SyntaxError
 }
 
 fun String.decomposeLine() : DecomposedLine {

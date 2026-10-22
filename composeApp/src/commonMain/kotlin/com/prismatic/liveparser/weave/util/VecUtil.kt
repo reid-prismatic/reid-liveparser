@@ -6,9 +6,6 @@ import androidx.compose.ui.graphics.toArgb
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
-import org.prismatic.opus.math.mix
-import org.prismatic.opus.math.times
-import org.prismatic.opus.math.xyz
 
 fun String.toVec2OrNull() : Vec2? {
     val parts = split(",")

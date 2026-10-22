@@ -3,7 +3,6 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.weave.grammar.DefinitionElement
 
 class TargetElement() : DefinitionElement<TargetElement>(

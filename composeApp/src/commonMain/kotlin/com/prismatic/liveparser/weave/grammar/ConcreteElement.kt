@@ -1,13 +1,11 @@
 package com.prismatic.liveparser.weave.grammar
 
-import com.prismatic.liveparser.LWEntityParseScope
-
 abstract class ConcreteElement<T: ConcreteElement<T>>(
     val namespace: String,
-    val shorthandRecognizer: LWEntityParseScope.() -> Boolean = { false }
-) : LWElement<T>() {
-    override fun LWEntityParseScope.recognize(): Boolean = isConcreteEntity(namespace) || shorthandRecognizer()
-    final override fun LWEntityParseScope.parse() {
+    val shorthandRecognizer: WeaveEntityParseScope.() -> Boolean = { false }
+) : TypedWeaveElement<T>() {
+    override fun WeaveEntityParseScope.recognize(): Boolean = isConcreteEntity(namespace) || shorthandRecognizer()
+    final override fun WeaveEntityParseScope.parse() {
         if(firstLine.isConcreteEntityStart) {
             val args = firstLine.trimmedBody.removeSurrounding("[","]").substringAfter(':',"").trim()
             parseArguments(args)

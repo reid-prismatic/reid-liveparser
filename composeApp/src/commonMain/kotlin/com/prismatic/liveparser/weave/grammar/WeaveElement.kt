@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.LWDimension
-import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.LiveParseEntityScope
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
@@ -33,11 +32,11 @@ import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<LineType, LWElement<*>>.parseElement(firstLineType: LineType): LWElement<*> {
-    val scope = LWEntityParseScope(this)
+fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): WeaveElement {
+    val scope = WeaveEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
     val match = matches.singleOrNull() ?: return ErrorElement()
-    val inst: LWElement<*> = existingEntity ?: match.makeInstance()
+    val inst: TypedWeaveElement<*> = (existingEntityData as? TypedWeaveElement<*>) ?: match.makeInstance()
     val bodyLines = entityLines.takeWhile { !it.startsWith("- ") }
 //    val propLines = entityLines.drop(bodyLines.size).filter { it.isNotBlank() }
     val props = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
@@ -136,45 +135,36 @@ private fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : P
         .getOrNull() ?: PropertyExpression.of("null")
 }
 
-fun LWEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
+class WeaveEntityParseScope(private val baseScope: LiveParseEntityScope<WeaveLineType, WeaveElement>) : LiveParseEntityScope<WeaveLineType, WeaveElement> by baseScope {
+    val firstLine = baseScope.entityLines.first().decomposeLine()
+    private val terminalLines = baseScope.entityLines.asReversed().asSequence().map { it.decomposeLine() }.takeWhile { it.isBlankLine || it.isPropertyLine }.toList().reversed()
+    val bodyLines = entityLines.subList(0, entityLines.size - terminalLines.size)
+}
+
+fun WeaveEntityParseScope.isConcreteEntity(namespace: String) : Boolean =
     firstLine.firstChar == '[' && firstLine.lastChar == ']'
             && (':' in firstLine.trimmedBody || '.' !in firstLine.trimmedBody)
             && firstLine.trimmedBody.trim().removeSurrounding("[","]").substringBefore(':').trim() == namespace
 
-fun LWEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
+fun WeaveEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
     firstLine.firstChar == '{' && firstLine.lastChar == '}'
             && ':' in firstLine.trimmedBody
             && firstLine.trimmedBody.trim().removeSurrounding("{","}").substringBefore(':').trim() == namespace
 
-abstract class LWElement<T: LWElement<T>> {
+interface WeaveElement {
+    val elementTypeName: String
 
-    abstract val elementTypeName: String
+    fun debugString(): String
 
-    abstract fun debugString(): String
+    fun WeaveEntityParseScope.recognize() : Boolean
+    fun WeaveEntityParseScope.parse()
 
-    abstract fun LWEntityParseScope.recognize() : Boolean
-    abstract fun LWEntityParseScope.parse()
-    abstract fun makeInstance() : T
+    fun makeInstanceGeneric() : WeaveElement
 
-    var propertyList : List<Prop<*>> = emptyList()
-        private set
-
-    var styles: List<String> by mutableStateOf(emptyList())
-        private set
-    val properties: Map<String, Prop<*>> by lazy {propertyList.associateBy { it.key }}
-    val otherProperties: List<PropertyLine> field = mutableStateListOf()
-    var acceptsOtherProperties : Boolean = false
-        private set
-
-    fun updateStyles(styles: List<String>) {
-        this.styles = styles
-    }
-
-    fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
-        // TODO: change the following to only set property lines that have changed, to reduce state changes
-        otherProperties.clear()
-        otherProperties.addAll(otherPropLines)
-    }
+    val styles: List<String>
+    val properties: Map<String, Prop<*>>
+    val acceptsOtherProperties : Boolean
+    val otherProperties: List<PropertyLine>
 
     interface Prop<T> {
         val key: String
@@ -190,8 +180,38 @@ abstract class LWElement<T: LWElement<T>> {
         val valueRange: IntRange
     }
 
+    val propertyList : List<WeaveElement.Prop<*>>
+
+}
+abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
+
+    abstract fun makeInstance() : T
+
+    override fun makeInstanceGeneric() = makeInstance()
+
+    final override var propertyList : List<WeaveElement.Prop<*>> = emptyList()
+        private set
+
+    final override var styles: List<String> by mutableStateOf(emptyList())
+        private set
+    override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
+    final override val otherProperties: List<PropertyLine> field = mutableStateListOf()
+    final override var acceptsOtherProperties : Boolean = false
+        private set
+
+    fun updateStyles(styles: List<String>) {
+        this.styles = styles
+    }
+
+    fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
+        // TODO: change the following to only set property lines that have changed, to reduce state changes
+        otherProperties.clear()
+        otherProperties.addAll(otherPropLines)
+    }
+
+
     interface PropMember<T> {
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T>
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T>
     }
 
     interface MultiPropMember {
@@ -218,7 +238,7 @@ abstract class LWElement<T: LWElement<T>> {
         override val displayName: String,
         override val type: PropertyType,
         override val multiInstanceAccumulator: PropertyAccumulator?,
-    ) : Prop<T>, PropMember<T> {
+    ) : WeaveElement.Prop<T>, PropMember<T> {
         val defaultPropValue = PropertyExpression.of(defaultValue)
         var propValue : ParsedProperty? by mutableStateOf(null)
         override val parsedProperty: ParsedProperty
@@ -241,7 +261,7 @@ abstract class LWElement<T: LWElement<T>> {
             private set
 
         override val isSpecified: Boolean get() = propValue != null
-        override fun getValue(thisRef: Any?, property: KProperty<*>): Prop<T> = this@PropImpl
+        override fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T> = this@PropImpl
     }
     interface PropProvider<T> {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): PropMember<T>
@@ -283,7 +303,7 @@ abstract class LWElement<T: LWElement<T>> {
             PropertyType.TypedExpression(PropertyDataType.Integer)
         ), def=def)
     fun prop(defaultValue: FontStyle, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
-    fun prop(vararg components: Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(type = PropertyType.Compound(components.map { it.type }))
+    fun prop(vararg components: WeaveElement.Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(type = PropertyType.Compound(components.map { it.type }))
 
     fun compoundPropProvider(
         key: String? = null,

@@ -3,10 +3,7 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
-import com.prismatic.liveparser.weave.grammar.isConcreteEntityStart
-import com.prismatic.liveparser.weave.grammar.isDefinitionEntityStart
 import com.prismatic.liveparser.weave.grammar.isVoiceoverEntityStart
 import org.prismatic.opus.time.MediaTime
 

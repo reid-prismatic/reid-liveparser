@@ -1,12 +1,12 @@
 package com.prismatic.liveparser.weave.elements
 
-import com.prismatic.liveparser.LWEntityParseScope
-import com.prismatic.liveparser.weave.grammar.LWElement
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
+import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
 
-class ErrorElement : LWElement<ErrorElement>() {
+class ErrorElement : TypedWeaveElement<ErrorElement>() {
     override val elementTypeName: String get() = "Error"
-    override fun LWEntityParseScope.recognize(): Boolean = false
-    override fun LWEntityParseScope.parse() {}
+    override fun WeaveEntityParseScope.recognize(): Boolean = false
+    override fun WeaveEntityParseScope.parse() {}
     override fun makeInstance(): ErrorElement = ErrorElement()
     override fun debugString(): String = "error"
 }

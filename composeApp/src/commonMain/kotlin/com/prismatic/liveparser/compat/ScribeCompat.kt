@@ -3,8 +3,7 @@ package com.prismatic.liveparser
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextRange
 import com.prismatic.liveparser.weave.elements.TextElement
-import com.prismatic.liveparser.weave.grammar.LWElement
-import com.prismatic.liveparser.weave.grammar.LineType
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -12,7 +11,7 @@ import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
 
-fun LWElement<*>.toMarkdownEntity(): MarkdownEntity = when(this) {
+fun TypedWeaveElement<*>.toMarkdownEntity(): MarkdownEntity = when(this) {
     is TextElement -> MarkdownEntity.Text(MarkdownPropertiesImpl(
         parseErrors = emptyList(),
         range = TextRange(0,0),
@@ -94,3 +93,11 @@ interface OutputFormat {
 val OutputFormat.width: Int get() = if(ratio.first > ratio.second) resolution * ratio.first / ratio.second else resolution
 val OutputFormat.height: Int get() = if(ratio.first > ratio.second) resolution else resolution * ratio.second / ratio.first
 val OutputFormat.ratioFraction: Float get() = ratio.first.toFloat() / ratio.second.toFloat()
+
+data class CodeError(
+    val message: String,
+    val entityId: EntityId,
+    val line: Int,
+    val char: Int,
+    val data: Any?
+)

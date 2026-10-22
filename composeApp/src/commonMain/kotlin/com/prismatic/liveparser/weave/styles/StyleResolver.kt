@@ -1,18 +1,12 @@
 package com.prismatic.liveparser.weave.styles
 
 import com.prismatic.liveparser.weave.elements.StyleElement
-import com.prismatic.liveparser.weave.grammar.LWElement
-import com.prismatic.liveparser.weave.properties.ParsedProperty
-import com.prismatic.liveparser.weave.properties.PropertyExpression
-import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
-import com.prismatic.liveparser.weave.properties.evaluate
-import com.prismatic.liveparser.weave.properties.toBoolOrNull
-import kotlin.collections.flatMap
-import kotlin.collections.plus
+import com.prismatic.liveparser.weave.grammar.WeaveElement
+import com.prismatic.liveparser.weave.properties.*
 
 fun resolveStyles(
-    element: LWElement<*>,
-    property: LWElement.Prop<*>,
+    element: WeaveElement,
+    property: WeaveElement.Prop<*>,
     styleElements: Map<String, List<StyleElement>>,
     propExprContext: PropertyExpressionContext
 ) : ParsedProperty {

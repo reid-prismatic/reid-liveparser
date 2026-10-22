@@ -6,7 +6,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.prismatic.liveparser.LWEntityParseScope
 import com.prismatic.liveparser.pt
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
 import com.prismatic.liveparser.weave.grammar.PropertyAccumulator
