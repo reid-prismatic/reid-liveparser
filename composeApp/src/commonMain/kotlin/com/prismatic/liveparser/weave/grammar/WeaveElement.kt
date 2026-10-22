@@ -181,7 +181,7 @@ fun interface PropertyAccumulator {
     }
 }
 
-private fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedProperty{
+fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedProperty{
     return runCatching { parsePropertyString(s,type) }
         .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
         .getOrNull() ?: PropertyExpression.of("null")

@@ -38,7 +38,12 @@ class TextElement() : ConcreteElement<TextElement>(
     }
 
     override fun parseBody(bodyLines: List<String>) {
-        text = bodyLines.joinToString("\n")
+        text = bodyLines.joinToString("\n") {
+            if( it.startsWith('|'))
+                it.drop(1).trimStart()
+            else
+                it
+        }
     }
 
     override fun parseArguments(arguments: String) {
@@ -51,10 +56,20 @@ class TextElement() : ConcreteElement<TextElement>(
         if( textPrefix != null) {
             val (prefix, type) = textPrefix
             textType = type
-            text = (listOf(firstBodyLine.drop(prefix.length)) + bodyLines.drop(1)).joinToString("\n")
+            text = (listOf(firstBodyLine.drop(prefix.length)) + bodyLines.drop(1)).joinToString("\n") {
+                if( it.startsWith('|'))
+                    it.drop(1).trimStart()
+                else
+                    it
+            }
         } else {
             textType = ""
-            text = bodyLines.joinToString("\n")
+            text = bodyLines.joinToString("\n") {
+                if( it.startsWith('|'))
+                    it.drop(1).trimStart()
+                else
+                    it
+            }
         }
     }
 
