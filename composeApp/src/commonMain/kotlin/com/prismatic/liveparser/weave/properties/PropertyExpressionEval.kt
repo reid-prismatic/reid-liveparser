@@ -241,6 +241,24 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
                     BinaryOperator.LESS -> BooleanLiteral(a < b)
                     BinaryOperator.GREATER -> BooleanLiteral(a > b)
                 }
+            } else if( left is FrameRateLiteral && right is FrameRateLiteral ) {
+                val a = left.value
+                val b = right.value
+                when(operator) {
+                    BinaryOperator.ADD -> this
+                    BinaryOperator.SUBTRACT -> this
+                    BinaryOperator.MULTIPLY -> this
+                    BinaryOperator.DIVIDE -> this
+                    BinaryOperator.AND -> this
+                    BinaryOperator.OR -> this
+                    BinaryOperator.RATIO -> this
+                    BinaryOperator.EQUAL -> BooleanLiteral(a==b)
+                    BinaryOperator.NOT_EQUAL -> BooleanLiteral(a!=b)
+                    BinaryOperator.LESS_OR_EQUAL -> BooleanLiteral(a <= b)
+                    BinaryOperator.GREATER_OR_EQUAL -> BooleanLiteral(a > b)
+                    BinaryOperator.LESS -> BooleanLiteral(a < b)
+                    BinaryOperator.GREATER -> BooleanLiteral(a > b)
+                }
             } else if( left is TimeLiteral && (right is NumberLiteral || right is IntegerLiteral) ) {
                 val a = left.value
                 val b = (right as? IntegerLiteral)?.value?.toDouble() ?: (right as? NumberLiteral)?.value ?: Double.NaN
@@ -394,6 +412,7 @@ fun PropertyExpression.evaluate(context: PropertyExpressionContext) : PropertyEx
         is StringLiteral,
         is SemanticTag,
         is RatioLiteral,
+        is FrameRateLiteral,
         is TimeLiteral -> this
         is PercentageLiteral -> NumberLiteral(this.fraction)
         is FunctionCall -> context.callFunction(name,arguments.map { it.evaluate(context) }) ?: this

@@ -95,7 +95,8 @@ enum class PropertyDataType {
     Vec2,
     Vec3,
     Vec4,
-    Ratio
+    Ratio,
+    FrameRate
 }
 
 private fun requireOptions(options: List<String>) {
@@ -932,6 +933,7 @@ private class PropertyStringParser(private val input: String) {
         PropertyDataType.Vec3 -> this is PropertyExpression.Vector && this.components.size==3 && this.isLiteralSubexpression
         PropertyDataType.Vec4 -> this is PropertyExpression.Vector && this.components.size==4 && this.isLiteralSubexpression
         PropertyDataType.Ratio -> this is PropertyExpression.RatioLiteral
+        PropertyDataType.FrameRate -> this is PropertyExpression.FrameRateLiteral
     }
 
     /** Notes that the text at [start] does not start an expression of [type]. */

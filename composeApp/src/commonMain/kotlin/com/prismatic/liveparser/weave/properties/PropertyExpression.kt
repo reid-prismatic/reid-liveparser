@@ -12,13 +12,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.prismatic.liveparser.LWDimension
+import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.toStringAsFixed
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
+import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Time
+import org.prismatic.opus.time.fps
 import org.prismatic.opus.time.millis
 import org.prismatic.opus.time.seconds
 import org.prismatic.opus.time.takeOrElse
@@ -200,6 +202,11 @@ sealed class PropertyExpression : ParsedProperty {
         override fun toDebugString(): String = "$value"
     }
 
+    /** `60fps`, `120fps` etc */
+    data class FrameRateLiteral(val value: FrameRate) : PropertyExpressionLiteral() {
+        override fun toDebugString(): String = "$value"
+    }
+
     /** `12pt`, `2.5cm`, `10mm`, `1in`: a length; [value] is the number as written, in [unit]s. */
     data class DimensionLiteral(val value: Double, val unit: DimensionUnit) : PropertyExpressionLiteral() {
         /** The same length in points. */
@@ -369,8 +376,9 @@ sealed class PropertyExpression : ParsedProperty {
                 is Vec2 -> Vector(listOf(of(value.x), of(value.y)))
                 is Vec3 -> Vector(listOf(of(value.x), of(value.y), of(value.z)))
                 is Vec4 -> Vector(listOf(of(value.x), of(value.y), of(value.z), of(value.w)))
-                is LWDimension.Points -> DimensionLiteral(value.value.toDouble(), DimensionUnit.POINT)
-                is LWDimension.Millimeters -> DimensionLiteral(value.value, DimensionUnit.MILLIMETER)
+                is WeaveDimension.Points -> DimensionLiteral(value.value.toDouble(), DimensionUnit.POINT)
+                is WeaveDimension.Millimeters -> DimensionLiteral(value.value, DimensionUnit.MILLIMETER)
+                is FrameRate -> FrameRateLiteral(value)
                 is FontWeight -> IntegerLiteral(value.weight.toLong())
                 is FontStyle -> StringLiteral(value.value.toString())
                 is Pair<*,*> if value.first is Int && value.second is Int -> RatioLiteral(value.first as Int, value.second as Int)
@@ -459,6 +467,10 @@ internal class PropertyExpressionParser(
             "m" to {(it*60).seconds},
             "min" to {(it*60).seconds},
             "h" to {(it*60*60).seconds},
+        )
+
+        private val FRAME_RATE_CONSTRUCTOR = mapOf<String,(Double) -> FrameRate>(
+            "fps" to {it.toInt().fps},
         )
 
         private val DIMENSION_UNITS = PropertyExpression.DimensionUnit.entries.associateBy { it.symbol }
@@ -603,6 +615,7 @@ internal class PropertyExpressionParser(
                 val suffix = input.substring(start + digits.length, position)
                 val node = TIME_CONSTRUCTOR[suffix]?.let { PropertyExpression.TimeLiteral(it(toDouble(digits, start))) }
                     ?: DIMENSION_UNITS[suffix]?.let { PropertyExpression.DimensionLiteral(toDouble(digits, start), it) }
+                    ?: FRAME_RATE_CONSTRUCTOR[suffix]?.let { PropertyExpression.FrameRateLiteral(it(toDouble(digits, start))) }
                     ?: fail(
                         "Invalid number '${input.substring(start, position)}' (the digits can only be followed " +
                             "directly by '%', a time unit (${TIME_CONSTRUCTOR.keys.joinToString()}) " +

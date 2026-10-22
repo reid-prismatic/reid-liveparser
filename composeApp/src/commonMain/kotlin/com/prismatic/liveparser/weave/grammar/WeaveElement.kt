@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.prismatic.liveparser.LWDimension
+import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.LiveParseEntityScope
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
@@ -21,6 +21,7 @@ import com.prismatic.liveparser.weave.properties.parsePropertyLine
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
+import org.prismatic.opus.time.FrameRate
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Millis
 import org.prismatic.opus.time.Nanos
@@ -302,7 +303,8 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     fun prop(defaultValue: Pair<Int,Int>, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
     fun prop(defaultValue: Vec3, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
     fun prop(defaultValue: Vec4, def:(PropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
-    fun prop(defaultValue: LWDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<LWDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
+    fun prop(defaultValue: FrameRate, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
+    fun prop(defaultValue: WeaveDimension, def:(PropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
     fun otherProps(): MultiPropProvider {
         check(!acceptsOtherProperties)
         acceptsOtherProperties = true
@@ -433,7 +435,7 @@ inline fun <reified T> inferPropertyType() : PropertyType {
         Seconds::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
         Millis::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
         Nanos::class -> return PropertyType.TypedExpression(PropertyDataType.Time)
-        LWDimension::class, LWDimension.Millimeters::class, LWDimension.Points::class ->
+        WeaveDimension::class, WeaveDimension.Millimeters::class, WeaveDimension.Points::class ->
             return PropertyType.TypedExpression(PropertyDataType.Dimension)
         else -> throw IllegalArgumentException("Unsupported type")
     }
