@@ -50,10 +50,16 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
         val parseResult = parsePropertyLine(line).copy(lineNumber = lineIndex)
         val key = parseResult.name
         val targetProperty = match.properties[key]
+        val compoundProperty = match.compoundProperties[key]
         if( parseResult.style.isNotEmpty() ) {
             styles += parseResult.style
         } else if( parseResult.target.isNotBlank() ) {
             targets += parseResult.target
+        } else if( targetProperty == null && compoundProperty!=null ) {
+            val compoundParseResult = parsePropertyStringHandlingErrors(parseResult.value, PropertyType.Compound(compoundProperty.components.map {
+                PropertyType.Optional(it.type)
+            }))
+            println("compoundParseResult: $compoundParseResult")
         } else if( targetProperty == null ) {
             if( match.acceptsOtherProperties ) {
                 otherProps.getOrPut(key,{mutableListOf()}).add(parseResult)
@@ -169,8 +175,15 @@ interface WeaveElement {
     val styles: List<String>
     val targets: List<String>
     val properties: Map<String, Prop<*>>
+    val compoundProperties: Map<String, CompoundProperty>
+
     val acceptsOtherProperties : Boolean
     val otherProperties: List<PropertyLine>
+
+    interface CompoundProperty {
+        val key: String
+        val components: List<Prop<*>>
+    }
 
     interface Prop<T> {
         val key: String
@@ -186,7 +199,8 @@ interface WeaveElement {
         val valueRange: IntRange
     }
 
-    val propertyList : List<WeaveElement.Prop<*>>
+    val propertyList : List<Prop<*>>
+    val compoundPropertyList : List<CompoundProperty>
 
 }
 abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
@@ -198,11 +212,15 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     final override var propertyList : List<WeaveElement.Prop<*>> = emptyList()
         private set
 
+    final override var compoundPropertyList : List<WeaveElement.CompoundProperty> = emptyList()
+        private set
+
     final override var styles: List<String> by mutableStateOf(emptyList())
         private set
     final override var targets: List<String> by mutableStateOf(emptyList())
         private set
     override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
+    override val compoundProperties: Map<String, WeaveElement.CompoundProperty> by lazy {compoundPropertyList.associateBy { it.key }}
     final override val otherProperties: List<PropertyLine> field = mutableStateListOf()
     final override var acceptsOtherProperties : Boolean = false
         private set
@@ -231,7 +249,11 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     }
 
     interface CompoundPropMember {
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): Unit
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.CompoundProperty
+    }
+
+    private inner class CompoundPropertyImpl(override val components: List<WeaveElement.Prop<*>>, override val key: String) : WeaveElement.CompoundProperty {
+
     }
 
     private inner class MultiPropImpl() : MultiPropMember {
@@ -316,23 +338,21 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
             PropertyType.TypedExpression(PropertyDataType.Integer)
         ), def=def)
     fun prop(defaultValue: FontStyle, def:(PropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
-    fun prop(vararg components: WeaveElement.Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(type = PropertyType.Compound(components.map { it.type }))
+    fun prop(vararg components: WeaveElement.Prop<*>, def:(PropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList())
 
     fun compoundPropProvider(
-        key: String? = null,
-        displayName: String? = null,
-        type: PropertyType,
-//        parser: (String) -> T?
+        components: List<WeaveElement.Prop<*>>,
     ) : CompoundPropProvider {
         return object : CompoundPropProvider {
             override fun provideDelegate(
                 thisRef: Any?,
                 prop: KProperty<*>
             ): CompoundPropMember {
-//                propertyList += liveProp
+                val compoundProp : WeaveElement.CompoundProperty = CompoundPropertyImpl(components, prop.name)
+                compoundPropertyList += compoundProp
                 return object : CompoundPropMember {
-                    override fun getValue(thisRef: Any?, property: KProperty<*>) {
-
+                    override fun getValue(thisRef: Any?, property: KProperty<*>) : WeaveElement.CompoundProperty {
+                        return compoundProp
                     }
                 }
             }

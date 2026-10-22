@@ -19,13 +19,14 @@ class TextElement() : ConcreteElement<TextElement>(
     shorthandRecognizer = { firstLine.isTextEntityStart }
 ) {
     override val elementTypeName: String get() = "Text"
+
+    var text : String by mutableStateOf("")
+
     val fontSize by prop(12.pt)
     val typeface by prop("")
     val weight by prop(FontWeight.Bold)
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)
-//    val text by prop("")
-    var text : String by mutableStateOf("")
     var textType : String by mutableStateOf("")
     val position by prop(Vec2.ZERO)
     val duration by prop(MediaTime.Unspecified)
