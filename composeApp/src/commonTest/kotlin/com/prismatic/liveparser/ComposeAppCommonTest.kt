@@ -22,13 +22,29 @@ class ComposeAppCommonTest {
             success: Boolean = errorType==null,
             errorOffset: Int = -1,
             style: String = "",
+            target: String = "",
             name: String = "",
             value: String = "",
             condition: String = ""
         ) {
-            val expected = PropertyLineParseResult(success, errorOffset, errorType, style, name, value, condition)
-            val actual = parsePropertyLine(s)
-            assertEquals(expected, actual)
+            val expected = PropertyLineParseResult(
+                success = success,
+                errorOffset = errorOffset,
+                errorType = errorType,
+                style = style,
+                target = target,
+                name = name,
+                value = value,
+                condition = condition,
+            )
+            // Source ranges are not under test here, so drop them before comparing.
+            val actual = parsePropertyLine(s).copy(
+                nameRange = IntRange.EMPTY,
+                valueRange = IntRange.EMPTY,
+                conditionRange = IntRange.EMPTY,
+                targetRange = IntRange.EMPTY,
+            )
+            assertEquals(expected, actual, "Input: \"$s\"")
         }
 
         checkLine("- one: two", name="one", value="two")
