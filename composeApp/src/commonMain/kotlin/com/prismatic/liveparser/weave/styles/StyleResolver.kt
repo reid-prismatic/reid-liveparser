@@ -10,12 +10,36 @@ fun resolveStyles(
     styleElements: Map<String, List<StyleElement>>,
     propExprContext: PropertyExpressionContext
 ) : ParsedProperty {
-    val styleProperties: List<ParsedProperty> = (element.styles + listOf("*"))
-        .flatMap { style -> styleElements[style] ?: emptyList() }
-        .filter { el -> el.condition?.evaluate(propExprContext)?.toBoolOrNull() != false  }
-        .flatMap { styleElement -> styleElement.styleProperties.filter { it.name == property.key } }
-        .filter { it.condition==null || (it.condition.evaluate(propExprContext) as? PropertyExpression.BooleanLiteral)?.value == true } // TODO: Handle condition here
-        .map { it.value }
+
+    val styleProperties = mutableListOf<ParsedProperty>()
+    val processedStyles = mutableSetOf<String>()
+
+    fun processStyle(name: String) {
+        for( el in styleElements[name] ?: emptyList() ) {
+            if( el.condition?.evaluate(propExprContext)?.toBoolOrNull() == false )
+                continue
+            if(el.styles.isNotEmpty()) {
+                processedStyles += name
+                el.styles.forEach {
+                    if( it !in processedStyles ) {
+                        processedStyles += it
+                        processStyle(it)
+                    }
+                }
+            }
+            for( styleProp in el.styleProperties ) {
+                if( styleProp.name != property.key )
+                    continue
+                if( styleProp.condition == null || styleProp.condition.evaluate(propExprContext).toBoolOrNull() == true ) {
+                    styleProperties.add(styleProp.value)
+                }
+            }
+        }
+    }
+
+    processStyle("*")
+    element.styles.forEach { processStyle(it) }
+
     val accumulator = property.multiInstanceAccumulator
     return if( accumulator != null ) {
         if(styleProperties.isEmpty()) {

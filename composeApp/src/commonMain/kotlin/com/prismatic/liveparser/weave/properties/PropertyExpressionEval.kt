@@ -66,6 +66,11 @@ fun PropertyExpression.toIntOrNull() : Int? = when (this) {
     else -> null
 }
 
+fun ParsedProperty.toBoolOrNull() : Boolean? = when (this) {
+    is BooleanLiteral -> this.value
+    else -> null
+}
+
 fun PropertyExpression.toBoolOrNull() : Boolean? = when (this) {
     is BooleanLiteral -> this.value
     else -> null

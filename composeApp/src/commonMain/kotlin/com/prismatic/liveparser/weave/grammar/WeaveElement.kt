@@ -42,6 +42,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
     val props = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
     val otherProps = mutableMapOf<String,MutableList<PropertyLineParseResult>>()
     val styles = mutableListOf<String>()
+    val targets = mutableListOf<String>()
     for( lineIndex in bodyLines.size..entityLines.lastIndex) {
         val line = entityLines[lineIndex]
         if( line.isBlank() ) continue
@@ -50,6 +51,8 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
         val targetProperty = match.properties[key]
         if( parseResult.style.isNotEmpty() ) {
             styles += parseResult.style
+        } else if( parseResult.target.isNotBlank() ) {
+            targets += parseResult.target
         } else if( targetProperty == null ) {
             if( match.acceptsOtherProperties ) {
                 otherProps.getOrPut(key,{mutableListOf()}).add(parseResult)
@@ -90,6 +93,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(): Weave
         inst.updateOtherProperties(otherPropLines)
     }
     inst.updateStyles(styles)
+    inst.updateTargets(targets)
     for ((propName, propLines) in props) {
         val prop = inst.properties[propName] ?: continue
         if( propLines.size == 1 ) {
@@ -162,6 +166,7 @@ interface WeaveElement {
     fun makeInstanceGeneric() : WeaveElement
 
     val styles: List<String>
+    val targets: List<String>
     val properties: Map<String, Prop<*>>
     val acceptsOtherProperties : Boolean
     val otherProperties: List<PropertyLine>
@@ -194,6 +199,8 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
 
     final override var styles: List<String> by mutableStateOf(emptyList())
         private set
+    final override var targets: List<String> by mutableStateOf(emptyList())
+        private set
     override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
     final override val otherProperties: List<PropertyLine> field = mutableStateListOf()
     final override var acceptsOtherProperties : Boolean = false
@@ -201,6 +208,10 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
 
     fun updateStyles(styles: List<String>) {
         this.styles = styles
+    }
+
+    fun updateTargets(targets: List<String>) {
+        this.targets = targets
     }
 
     fun updateOtherProperties(otherPropLines: List<PropertyLine>) {

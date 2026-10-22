@@ -6,6 +6,8 @@ import com.prismatic.liveparser.weave.properties.isPropertyNameChar
 import com.prismatic.liveparser.weave.properties.isPropertyNameStartChar
 import com.prismatic.liveparser.weave.properties.isStyleNameChar
 import com.prismatic.liveparser.weave.properties.isStyleNameStartChar
+import com.prismatic.liveparser.weave.properties.isTargetNameChar
+import com.prismatic.liveparser.weave.properties.isTargetNameStartChar
 
 abstract class StringParser(val string: String) {
     class ParseFailure : Throwable()
@@ -64,6 +66,13 @@ abstract class StringParser(val string: String) {
             error(StringParseErrorType.ExpectedStyleName)
         advance()
         while( ch.isStyleNameChar() ) {advance()}
+    }
+
+    fun parseTargetName() = extract{
+        if(!ch.isTargetNameStartChar())
+            error(StringParseErrorType.ExpectedStyleName)
+        advance()
+        while( ch.isTargetNameChar() ) {advance()}
     }
 
     fun parseCondition() = extract {
