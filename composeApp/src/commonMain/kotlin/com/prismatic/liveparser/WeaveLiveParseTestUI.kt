@@ -227,9 +227,9 @@ private class SamplePropertyExpressionContext(
 ) : PropertyExpressionContext {
 
     override fun resolveVariable(symbol: String): PropertyExpression? = when(symbol) {
-        "foo" -> PropertyExpression.of(123)
-        "bar" -> PropertyExpression.of("Test")
-        "cts" -> PropertyExpression.of(progress)
+//        "foo" -> PropertyExpression.of(123)
+//        "bar" -> PropertyExpression.of("Test")
+//        "cts" -> PropertyExpression.of(progress)
         "elementType" -> PropertyExpression.of(elementEntity.elementTypeName)
         "textType" -> PropertyExpression.of((elementEntity as? TextElement)?.textType?.ifBlank { "Text" } ?: "")
         "H1" -> PropertyExpression.of((elementEntity as? TextElement)?.textType == "h1")

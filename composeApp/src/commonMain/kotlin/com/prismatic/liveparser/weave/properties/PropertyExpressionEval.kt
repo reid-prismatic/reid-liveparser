@@ -32,6 +32,8 @@ interface PropertyExpressionContext {
     }
 }
 
+fun PropertyExpressionContext.provideVariables(resolveVariable:(String)-> PropertyExpression?) = PropertyExpressionContextWithVarProvider(resolveVariable, this)
+
 class PropertyExpressionLambdaContext(val parameters: List<String>, val baseContext: PropertyExpressionContext) : PropertyExpressionContext by baseContext {
     override fun resolveVariable(symbol: String): PropertyExpression? =
         if(symbol in parameters) Variable(symbol) else this.baseContext.resolveVariable(symbol)
@@ -39,6 +41,10 @@ class PropertyExpressionLambdaContext(val parameters: List<String>, val baseCont
 
 class PropertyExpressionContextWithVars( val vars: Map<String, PropertyExpression>, val baseContext: PropertyExpressionContext ) : PropertyExpressionContext by baseContext {
     override fun resolveVariable(symbol: String): PropertyExpression? = vars[symbol] ?: baseContext.resolveVariable(symbol)
+}
+
+class PropertyExpressionContextWithVarProvider(val provideVariable:(String)-> PropertyExpression?, val baseContext: PropertyExpressionContext ) : PropertyExpressionContext by baseContext {
+    override fun resolveVariable(symbol: String): PropertyExpression? = provideVariable(symbol) ?: baseContext.resolveVariable(symbol)
 }
 
 fun PropertyExpression.Easing.evaluate(context: PropertyExpressionContext): Easing = when (this) {

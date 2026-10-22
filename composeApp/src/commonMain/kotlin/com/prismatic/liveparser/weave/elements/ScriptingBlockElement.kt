@@ -10,9 +10,12 @@ import com.prismatic.liveparser.weave.grammar.isCodeBlockStart
 import com.prismatic.liveparser.weave.grammar.isScriptStart
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpression
+import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.PropertyType
+import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.parsePropertyExpression
 import com.prismatic.liveparser.weave.properties.parsePropertyString
+import com.prismatic.liveparser.weave.properties.provideVariables
 import kotlin.text.clear
 
 class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
@@ -28,34 +31,42 @@ class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
     override fun makeInstance(): ScriptingBlockElement  = ScriptingBlockElement()
     override val elementTypeName: String get() = "ScriptingBlock"
 
-    override fun debugString(): String = "ScriptingBlock[$codeLanguage]:${code.replace("\n", "\\n")}"
+    override fun debugString(): String = if(variables.isNotEmpty()) {
+        "ScriptingBlock {\n" + variables.entries.joinToString("\n") { "  ${it.key} = ${it.value.evaluate(PropertyExpressionContext.Empty).toFlatString()}" } + "\n}"
+    } else {
+        "ScriptingBlock[$codeLanguage]:${code.replace("\n", "\\n")}"
+    }
 
     override fun WeaveEntityParseScope.recognize(): Boolean = firstLine.isScriptStart
 
     override fun WeaveEntityParseScope.parse() {
-        val languageSpec = firstLine.trimmedBody.drop(3).trim()
+        val languageSpec = firstLine.trimmedBody.drop(1).trim()
         val codeLines = bodyLines.drop(1).dropLast(1)
         code = codeLines.joinToString("\n")
         if( languageSpec.isNotEmpty()) {
             codeLanguage = languageSpec
             variables.clear()
-        } else if( codeLines.all { it.isBlank() || it.isVariableAssignment() }) {
-            codeLanguage = "vars"
-            variables.clear()
+        } else if( codeLines.all { it.isBlank() || it.isVariableAssignment()  } && !codeLines.all { it.isBlank() }) {
+            codeLanguage = ""
+            val unused = variables.keys.toMutableSet()
+            val localVariables = mutableMapOf<String, PropertyExpression>()
+            val exprContext = PropertyExpressionContext.Empty.provideVariables { localVariables[it] }
             for (line in codeLines) {
                 val name = line.substringBefore('=',"").trim()
                 if( !name.isVariableName() )
                     continue
                 val value = parsePropertyStringHandlingErrors(line.substringAfter('=').trim(), PropertyType.Expression)
                 if( value is PropertyExpression ) {
-                    variables[name] = value
-                } else {
-                    variables.remove(name)
+                    val resolvedValue = value.evaluate(exprContext)
+                    variables[name] = resolvedValue
+                    localVariables[name] = resolvedValue
+                    unused.remove(name)
                 }
             }
+            unused.forEach { variables.remove(it) }
         } else {
             variables.clear()
-            codeLanguage = "?"
+            codeLanguage = ""
         }
 
     }
