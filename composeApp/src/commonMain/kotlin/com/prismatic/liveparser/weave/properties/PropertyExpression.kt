@@ -414,6 +414,7 @@ internal class PropertyExpressionParser(
     private val end: Int = input.length,
     private val isComponent: Boolean = false,
     private val groupEnds: MutableMap<Int, Int> = HashMap(),
+    private val enableColorOperators: Boolean = true
 ) {
 
     private enum class Kind {
@@ -494,7 +495,7 @@ internal class PropertyExpressionParser(
     // Tokenizer
     // ---------------------------------------------------------------------------------------------------
 
-    private class Lexer(private val input: String, start: Int, private val end: Int) {
+    private class Lexer(private val input: String, start: Int, private val end: Int, private val enableColorOperators: Boolean) {
         private var position = start
         private var isFinished = false
 
@@ -856,7 +857,7 @@ internal class PropertyExpressionParser(
         val readEnd: Int get() = if (read.isEmpty()) -1 else read[read.size - 1].end
     }
 
-    private val tokens = Tokens(Lexer(input, start, end))
+    private val tokens = Tokens(Lexer(input, start, end, enableColorOperators))
     private var index = 0
 
     /** How many parentheses, calls, unary operators and easing expressions the parser is currently inside of. */
@@ -935,7 +936,7 @@ internal class PropertyExpressionParser(
         }
         val groupEnd = groupEnd(i)
         if (groupEnd < 0) return -1
-        val next = Lexer(input, groupEnd, end).next()
+        val next = Lexer(input, groupEnd, end, enableColorOperators).next()
         return if (next.kind == Kind.DOT_DOT && next.start == groupEnd) next.end else -1
     }
 
@@ -1094,7 +1095,7 @@ internal class PropertyExpressionParser(
             // A group without an end cannot be told apart. Reading it as the arguments of an easing is the lenient
             // choice: the parser then reports whatever is wrong in the order in which it appears.
             if (groupEnd < 0) return true
-            Lexer(input, groupEnd, end).next().also { if (it.start != groupEnd) return false }
+            Lexer(input, groupEnd, end, enableColorOperators).next().also { if (it.start != groupEnd) return false }
         } else {
             if (!isAdjacent(i)) return false
             tokens[i]
@@ -1171,6 +1172,20 @@ internal class PropertyExpressionParser(
         return easing.at(token.start, previous.end)
     }
 
+    private fun Token.asColorLiteral() : PropertyExpression.ColorLiteral? {
+        if( kind == Kind.LITERAL && literal is PropertyExpression.ColorLiteral) return literal
+        if( kind == Kind.NAME && enableColorOperators ) {
+            val name = text(this)
+            if( name in weaveColorNames) {
+                val color = weaveColorNames[name]
+                if( color != null ) {
+                    return PropertyExpression.ColorLiteral(color.toArgb().toUInt())
+                }
+            }
+        }
+        return null
+    }
+
     /** `"{" (NAME ("," NAME)* "->")? expression "}"` */
     private fun parseEasingLambda(): PropertyExpression.Easing {
         val open = current
@@ -1215,9 +1230,47 @@ internal class PropertyExpressionParser(
         }
     }
 
+    private fun parseColorLiteral() : PropertyExpression? {
+        val token = current
+        token.asColorLiteral()?.let {
+            index++
+            return it
+        }
+        val next = tokens[index + 1]
+        val nextColorLiteral = next.asColorLiteral()
+        if( nextColorLiteral != null ) {
+            val color = Color(nextColorLiteral.argb.toInt())
+            if( token.kind==Kind.LITERAL && token.literal is PropertyExpression.PercentageLiteral) {
+                index += 2
+                val newColor = color.copy(alpha = (color.alpha * token.literal.fraction.toFloat()).coerceIn(0f,1f))
+                return PropertyExpression.ColorLiteral(newColor.toArgb().toUInt())
+            } else if( token.kind==Kind.NAME ) {
+                val name = text(token)
+                when(name) {
+                    "medium" -> {
+                        index += 2
+                        return PropertyExpression.ColorLiteral(color.mediumVariant().toArgb().toUInt())
+                    }
+                    "dark" -> {
+                        index += 2
+                        return PropertyExpression.ColorLiteral(color.darkVariant().toArgb().toUInt())
+                    }
+                    "light" -> {
+                        index += 2
+                        return PropertyExpression.ColorLiteral(color.lightVariant().toArgb().toUInt())
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     /** `("-" | "!") unary | primary` */
     private fun parseUnary(): PropertyExpression {
         val token = current
+        if( enableColorOperators ) {
+            parseColorLiteral()?.let { return it }
+        }
         val operator = when (token.kind) {
             Kind.MINUS -> PropertyExpression.UnaryOperator.NEGATE
             Kind.PLUS -> PropertyExpression.UnaryOperator.UNARY_POSITIVE
