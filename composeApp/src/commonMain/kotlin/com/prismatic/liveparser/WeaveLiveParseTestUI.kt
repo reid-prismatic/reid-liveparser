@@ -45,7 +45,9 @@ import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.evaluate
+import com.prismatic.liveparser.weave.properties.toColorOrNull
 import com.prismatic.liveparser.weave.properties.toFlatString
+import com.prismatic.liveparser.weave.properties.toFloatOrNull
 import com.prismatic.liveparser.weave.properties.toVec2OrNull
 import com.prismatic.liveparser.weave.properties.toWeaveDimensionOrNull
 import com.prismatic.liveparser.weave.styles.resolveStyles
@@ -173,10 +175,25 @@ private fun EntityDetails(
                 Row {
                     val lineNumberStr = if(prop.lineNumber>=0) "(${prop.lineNumber + parseEntity.startLine + 1})" else ""
                     Text( "${prop.key}$lineNumberStr:  ", Modifier.padding(start = 10.dp).width(70.dp), overflow = TextOverflow.Ellipsis, maxLines = 1)
-                    Text(styleResolver(prop).evaluate(propExprContext).toFlatString(), Modifier.clickable {
-                        val newValue = makeEditingTestValue(prop, propExprContext)
-                        if(newValue != null) {
-                            prop.editValueAsString(newValue)
+                    val resolvedValue = styleResolver(prop).evaluate(propExprContext)
+                    Text(resolvedValue.toFlatString(), Modifier.clickable {
+                        if( prop.isColorProp() ) {
+                            if (resolvedValue.toColorOrNull() == Color.Black)
+                                prop.editValue(Color.Green)
+                            else
+                                prop.editValue(Color.Black)
+                        } else if( prop.isPercentProp() ) {
+                            val n = resolvedValue.toFloatOrNull() ?: 0f
+                            prop.editValue(if(n>=1f) 0f else ((n+0.1f).coerceAtMost(1f)))
+                        } else if( prop.isEnumProp() ) {
+                            val options = prop.enumOptions
+                            val index = options.indexOf(resolvedValue.toFlatString())
+                            prop.editValueAsString(options[(index + 1) % options.size])
+                        } else {
+                            val newValue = makeEditingTestValue(prop, propExprContext)
+                            if (newValue != null) {
+                                prop.editValueAsString(newValue)
+                            }
                         }
                     })
                 }

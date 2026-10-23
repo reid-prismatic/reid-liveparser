@@ -6,12 +6,14 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.parser.EntityId
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.parser.LiveParseEntityScope
 import com.prismatic.liveparser.offsetToStartOfLine
+import com.prismatic.liveparser.toStringAsFixed
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -27,9 +29,21 @@ import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.MultiPropProvide
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.PropMember
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.PropProvider
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.SinglePropertyDefScope
+import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.PropertyExpressionParseException
 import com.prismatic.liveparser.weave.properties.PropertyLineParseResult
+import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.parsePropertyLine
+import com.prismatic.liveparser.weave.properties.toBoolOrNull
+import com.prismatic.liveparser.weave.properties.toColorOrNull
+import com.prismatic.liveparser.weave.properties.toDoubleOrNull
+import com.prismatic.liveparser.weave.properties.toFloatOrNull
+import com.prismatic.liveparser.weave.properties.toIntOrNull
+import com.prismatic.liveparser.weave.properties.toLongOrNull
+import com.prismatic.liveparser.weave.properties.toStringOrNull
+import com.prismatic.liveparser.weave.properties.toVec2OrNull
+import com.prismatic.liveparser.weave.properties.toVec3OrNull
+import com.prismatic.liveparser.weave.properties.toVec4OrNull
 import com.prismatic.liveparser.weave.types.WeavePercent
 import com.prismatic.liveparser.weave.util.offset
 import org.prismatic.opus.math.Vec2
@@ -46,6 +60,7 @@ import org.prismatic.opus.time.nanos
 import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
 import kotlin.collections.plus
+import kotlin.enums.enumEntries
 import kotlin.reflect.KProperty
 
 fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(liveParseConnection: WeaveLiveParseConnection): WeaveElement {
@@ -294,6 +309,109 @@ interface WeaveElement {
 
 }
 
+fun WeaveElement.Prop<*>.editVectorValue(vararg components: Float) {
+    val componentStings = components.map { it.toStringAsFixed(3) }.toTypedArray()
+    for( i in componentStings.indices ) {
+        var s = componentStings[i]
+        while( '.' in s && s.endsWith('0') && !s.endsWith(".0"))
+            s = s.dropLast(1)
+        componentStings[i] = s
+    }
+    componentStings
+    if( componentStings.all { it.endsWith(".0") }) {
+        for( i in componentStings.indices ) {
+            componentStings[i] = componentStings[i].dropLast(2)
+        }
+    }
+    editValueAsString(componentStings.joinToString(", "))
+}
+
+
+fun WeaveElement.Prop<*>.editValue(newValue: Vec2) {
+    editVectorValue(newValue.x, newValue.y)
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Vec3) {
+    editVectorValue(newValue.x, newValue.y, newValue.z)
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Vec4) {
+    editVectorValue(newValue.x, newValue.y, newValue.z, newValue.w)
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Color) {
+    editValueAsString( "#" + newValue.toArgb().toHexString(HexFormat.UpperCase))
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Int) {
+    when( (type as? PropertyType.TypedExpression)?.expectedType ) {
+        PropertyDataType.Percent -> editValueAsString("$newValue%")
+        PropertyDataType.FrameRate -> editValueAsString( "${newValue}fps")
+        else -> editValueAsString( newValue.toString() )
+    }
+}
+
+fun WeaveElement.Prop<*>.editNumberValue(newValue: Float, maxDecimals: Int = 3, suffix: String = "") {
+    var s = newValue.toStringAsFixed(maxDecimals)
+    while( '.' in s && s.endsWith('0') && !s.endsWith(".0"))
+        s = s.dropLast(1)
+    if( s.endsWith(".0"))
+        s = s.dropLast(2)
+    editValueAsString( s + suffix )
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Float) {
+    when( (type as? PropertyType.TypedExpression)?.expectedType ) {
+        PropertyDataType.Percent -> editNumberValue(newValue*100f, 2, "%")
+        PropertyDataType.FrameRate -> editNumberValue(newValue, 0, "fps")
+        PropertyDataType.Integer -> editValueAsString( newValue.toLong().toString() )
+        else -> editNumberValue(newValue, 3)
+    }
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: WeaveDimension) {
+    when(newValue) {
+        is WeaveDimension.Points -> editNumberValue(newValue.value, 2, "pt")
+        is WeaveDimension.Millimeters -> editNumberValue(newValue.value.toFloat(), 2, "mm")
+    }
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: WeavePercent) {
+    editNumberValue(newValue.percent, 2, "%")
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: String) {
+    if(type is PropertyType.UnquotedStringLiteral)
+        editValueAsString(newValue)
+    else
+        editValueAsString('"' + newValue.replace("\"", "\\\"") + '"')
+}
+
+fun WeaveElement.Prop<*>.isTypedExpression(expectedType: PropertyDataType) = (type as? PropertyType.TypedExpression)?.expectedType == expectedType
+
+fun WeaveElement.Prop<*>.isColorProp() = isTypedExpression(PropertyDataType.Color)
+fun WeaveElement.Prop<*>.isPercentProp() = isTypedExpression(PropertyDataType.Percent)
+fun WeaveElement.Prop<*>.isDimensionProp() = isTypedExpression(PropertyDataType.Dimension)
+fun WeaveElement.Prop<*>.isRatioProp() = isTypedExpression(PropertyDataType.Ratio)
+fun WeaveElement.Prop<*>.isVec2Prop() = isTypedExpression(PropertyDataType.Vec2)
+fun WeaveElement.Prop<*>.isVec3Prop() = isTypedExpression(PropertyDataType.Vec3)
+fun WeaveElement.Prop<*>.isVec4Prop() = isTypedExpression(PropertyDataType.Vec4)
+fun WeaveElement.Prop<*>.isStringProp() = isTypedExpression(PropertyDataType.String) || type is PropertyType.UnquotedStringLiteral
+fun WeaveElement.Prop<*>.isEnumProp() = type is PropertyType.UnquotedStringEnum
+val WeaveElement.Prop<*>.enumOptions : List<String> get() = (type as? PropertyType.UnquotedStringEnum)?.options ?: emptyList()
+fun WeaveElement.Prop<*>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context)
+fun WeaveElement.Prop<Int>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toIntOrNull()
+fun WeaveElement.Prop<Long>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toLongOrNull()
+fun WeaveElement.Prop<Float>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toFloatOrNull()
+fun WeaveElement.Prop<Double>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toDoubleOrNull()
+fun WeaveElement.Prop<String>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toStringOrNull()
+fun WeaveElement.Prop<Boolean>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toBoolOrNull()
+fun WeaveElement.Prop<Vec2>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toVec2OrNull()
+fun WeaveElement.Prop<Vec3>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toVec3OrNull()
+fun WeaveElement.Prop<Vec4>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toVec4OrNull()
+fun WeaveElement.Prop<Color>.evaluate(context: PropertyExpressionContext = PropertyExpressionContext.Empty) = parsedProperty.evaluate(context).toColorOrNull()
+
+
 interface PropertyHolder {
 
     fun <T> propProvider(
@@ -329,6 +447,7 @@ interface PropertyHolder {
     fun prop(defaultValue: Pair<Int,Int>, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
     fun prop(defaultValue: Vec3, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
     fun prop(defaultValue: Vec4, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
+    fun prop(defaultValue: Enum<*>, options: List<String>, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Enum<*>> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum(options = options), def=def)
     fun prop(defaultValue: FrameRate, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
     fun prop(defaultValue: WeaveDimension, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
     fun prop(defaultValue: FontWeight, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
@@ -340,6 +459,10 @@ interface PropertyHolder {
     fun prop(vararg components: WeaveElement.Prop<*>, def:(CompoundPropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList(), def)
     fun otherProps(): MultiPropProvider = multiPropProvider()
 }
+
+@Suppress("UNCHECKED_CAST")
+inline fun <reified T:Enum<T>> PropertyHolder.enumProp(defaultValue: T, noinline def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<T> =
+    prop(defaultValue, enumEntries<T>().map { it.name }, def) as PropProvider<T>
 
 class PropertyManager : PropertyHolder {
 

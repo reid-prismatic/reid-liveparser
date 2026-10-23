@@ -8,6 +8,8 @@ import com.prismatic.liveparser.mm
 import com.prismatic.liveparser.pt
 import com.prismatic.liveparser.weave.properties.PropertyExpression.*
 import org.prismatic.opus.math.Vec2
+import org.prismatic.opus.math.Vec3
+import org.prismatic.opus.math.Vec4
 import org.prismatic.opus.time.MediaTime
 import org.prismatic.opus.time.Micros
 import org.prismatic.opus.time.Millis
@@ -76,7 +78,14 @@ fun PropertyExpression.toIntOrNull() : Int? = when (this) {
     else -> null
 }
 
+fun ParsedProperty.toColorOrNull() : Color? = when (this) {
+    is ColorLiteral -> Color(this.argb.toInt())
+    else -> null
+}
+
 fun ParsedProperty.toVec2OrNull() = (this as? PropertyExpression)?.toVec2OrNull()
+fun ParsedProperty.toVec3OrNull() = (this as? PropertyExpression)?.toVec3OrNull()
+fun ParsedProperty.toVec4OrNull() = (this as? PropertyExpression)?.toVec4OrNull()
 
 fun PropertyExpression.toVec2OrNull() : Vec2? {
     if( this !is Vector )
@@ -87,6 +96,30 @@ fun PropertyExpression.toVec2OrNull() : Vec2? {
     val y = components[1].toFloatOrNull() ?: return null
     return Vec2(x,y)
 }
+
+fun PropertyExpression.toVec3OrNull() : Vec3? {
+    if( this !is Vector )
+        return null
+    if( components.size != 3 )
+        return null
+    val x = components[0].toFloatOrNull() ?: return null
+    val y = components[1].toFloatOrNull() ?: return null
+    val z = components[2].toFloatOrNull() ?: return null
+    return Vec3(x,y,z)
+}
+
+fun PropertyExpression.toVec4OrNull() : Vec4? {
+    if( this !is Vector )
+        return null
+    if( components.size != 4 )
+        return null
+    val x = components[0].toFloatOrNull() ?: return null
+    val y = components[1].toFloatOrNull() ?: return null
+    val z = components[2].toFloatOrNull() ?: return null
+    val w = components[3].toFloatOrNull() ?: return null
+    return Vec4(x,y,z,w)
+}
+
 
 fun ParsedProperty.toWeaveDimensionOrNull() = (this as? PropertyExpression)?.toWeaveDimensionOrNull()
 
@@ -104,6 +137,37 @@ fun PropertyExpression.toWeaveDimensionOrNull() : WeaveDimension? {
 fun ParsedProperty.toBoolOrNull() : Boolean? = when (this) {
     is BooleanLiteral -> this.value
     else -> null
+}
+
+fun ParsedProperty.toIntOrNull() : Int? = when (this) {
+    is IntegerLiteral -> this.value.toInt()
+    is NumberLiteral -> this.value.toInt()
+    else -> null
+}
+
+fun ParsedProperty.toLongOrNull() : Long? = when (this) {
+    is IntegerLiteral -> this.value
+    is NumberLiteral -> this.value.toLong()
+    else -> null
+}
+
+fun ParsedProperty.toFloatOrNull() : Float? = when (this) {
+    is IntegerLiteral -> this.value.toFloat()
+    is NumberLiteral -> this.value.toFloat()
+    is PercentageLiteral -> this.fraction.toFloat()
+    else -> null
+}
+
+fun ParsedProperty.toDoubleOrNull() : Double? = when (this) {
+    is IntegerLiteral -> this.value.toDouble()
+    is NumberLiteral -> this.value
+    is PercentageLiteral -> this.fraction
+    else -> null
+}
+
+fun ParsedProperty.toStringOrNull() : String? = when (this) {
+    is StringLiteral -> this.value
+    else -> this.toFlatString()
 }
 
 fun PropertyExpression.toBoolOrNull() : Boolean? = when (this) {

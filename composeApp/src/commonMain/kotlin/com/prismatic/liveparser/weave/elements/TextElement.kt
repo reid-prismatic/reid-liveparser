@@ -15,6 +15,7 @@ import com.prismatic.liveparser.weave.elements.generic.TransformProperties
 import com.prismatic.liveparser.weave.elements.generic.TransformPropertiesImpl
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
 import com.prismatic.liveparser.weave.grammar.PropertyManager
+import com.prismatic.liveparser.weave.grammar.enumProp
 import com.prismatic.liveparser.weave.grammar.isTextEntityStart
 import com.prismatic.liveparser.weave.grammar.textEntityPrefixes
 
@@ -30,12 +31,15 @@ class TextElement private constructor(pm: PropertyManager) :
 
     override val elementTypeName: String get() = "Text"
 
+    enum class Align { Left, Center, Right }
+
     var text : String by mutableStateOf("")
 
     val fontSize by prop(12.pt)
     val typeface by prop("") {
         acceptUnquotedString()
     }
+    val textAlign by enumProp(Align.Left)
     val weight by prop(FontWeight.Bold)
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)

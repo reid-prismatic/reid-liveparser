@@ -384,6 +384,7 @@ sealed class PropertyExpression : ParsedProperty {
                 is FontStyle -> StringLiteral(value.value.toString())
                 is WeavePercent -> PercentageLiteral(value.percent.toDouble())
                 is Pair<*,*> if value.first is Int && value.second is Int -> RatioLiteral(value.first as Int, value.second as Int)
+                is Enum<*> -> StringLiteral(value.name)
                 else -> throw IllegalArgumentException("Cannot convert ${value?.let { it::class.simpleName}} to PropertyExpression")
             }
         }
