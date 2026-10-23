@@ -1,11 +1,12 @@
 package com.prismatic.liveparser.weave.properties
 
 import com.prismatic.liveparser.StringParser
+import com.prismatic.liveparser.weave.grammar.WeaveParseError
 
 data class PropertyLineParseResult(
     val success: Boolean = true,
     val errorOffset: Int = -1,
-    val errorType: StringParseErrorType? = null,
+    val errorType: WeaveParseError? = null,
     val style: String = "",
     val target: String = "",
     val name: String = "",
@@ -24,15 +25,6 @@ fun Char.isStyleNameStartChar() = isLetterOrDigit() || this == '_'
 fun Char.isStyleNameChar() = isLetterOrDigit() || this == '_'
 fun Char.isTargetNameStartChar() = isLetterOrDigit() || this == '_'
 fun Char.isTargetNameChar() = isLetterOrDigit() || this == '_'
-
-sealed class StringParseErrorType(val message: String) {
-    data class UnexpectedChar(val expected: Char, val actual: Char) : StringParseErrorType("Expected $expected, got $actual")
-    data object EndExpected : StringParseErrorType("Unexpected characters")
-    data object MismatchedBracket : StringParseErrorType("Mismatched brackets")
-    data object UnterminatedQuote : StringParseErrorType("Unterminated quote")
-    data object ExpectedPropertyName : StringParseErrorType("Expected property name")
-    data object ExpectedStyleName : StringParseErrorType("Expected style reference")
-}
 
 fun parsePropertyLine(propertyLine: String): PropertyLineParseResult {
     val parser = PropertyLineParser(propertyLine)

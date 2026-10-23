@@ -5,11 +5,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.StringParser
 import com.prismatic.liveparser.weave.grammar.DefinitionElement
+import com.prismatic.liveparser.weave.grammar.WeaveParseError
 import com.prismatic.liveparser.weave.grammar.isStyleEntityStart
 import com.prismatic.liveparser.weave.properties.ParsedStringFragment
 import com.prismatic.liveparser.weave.properties.PropertyExpression
-import com.prismatic.liveparser.weave.properties.StringParseErrorType
-import com.prismatic.liveparser.weave.properties.isStyleNameStartChar
 import com.prismatic.liveparser.weave.properties.parsePropertyExpression
 
 class StyleElement() : DefinitionElement<StyleElement>(
@@ -42,7 +41,7 @@ class StyleElement() : DefinitionElement<StyleElement>(
 private data class StyleArgsParseResult(
     val success: Boolean = true,
     val errorOffset: Int = -1,
-    val errorType: StringParseErrorType? = null,
+    val errorType: WeaveParseError? = null,
     val wildcard: Boolean = false,
     val styleName: String = "",
     val condition: String = ""

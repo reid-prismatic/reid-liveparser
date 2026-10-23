@@ -2,6 +2,7 @@ package com.prismatic.liveparser
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextRange
+import com.prismatic.liveparser.parser.EntityId
 import com.prismatic.liveparser.weave.elements.TextElement
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import org.prismatic.opus.math.Vec2

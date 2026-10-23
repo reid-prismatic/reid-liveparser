@@ -7,10 +7,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.prismatic.liveparser.EntityId
+import com.prismatic.liveparser.parser.EntityId
 import com.prismatic.liveparser.WeaveDimension
-import com.prismatic.liveparser.LiveParseEntityScope
+import com.prismatic.liveparser.parser.LiveParseEntityScope
 import com.prismatic.liveparser.offsetToStartOfLine
+import com.prismatic.liveparser.parser.parseError
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -18,8 +19,10 @@ import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
 import com.prismatic.liveparser.weave.elements.ErrorElement
+import com.prismatic.liveparser.weave.properties.PropertyExpressionParseException
 import com.prismatic.liveparser.weave.properties.PropertyLineParseResult
 import com.prismatic.liveparser.weave.properties.parsePropertyLine
+import com.prismatic.liveparser.weave.util.offset
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -52,6 +55,10 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
         val line = entityLines[lineIndex]
         if( line.isBlank() ) continue
         val parseResult = parsePropertyLine(line).copy(lineNumber = lineIndex)
+        if(parseResult.errorType != null) {
+            parseError(parseResult.errorType, lineIndex, parseResult.errorOffset..parseResult.errorOffset)
+            continue
+        }
         val key = parseResult.name
         val targetProperty = match.properties[key]
         val compoundProperty = match.compoundProperties[key]
@@ -59,11 +66,16 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
             styles += parseResult.style
         } else if( parseResult.target.isNotBlank() ) {
             targets += parseResult.target
+        } else if (parseResult.name.isBlank() ) {
+            parseError(WeaveParseError.MalformedProperty, lineIndex, parseResult.nameRange)
         } else if( targetProperty == null && compoundProperty!=null ) {
             val compoundType = PropertyType.Compound(compoundProperty.components.map {
                 PropertyType.Optional(it.type)
             })
             val compoundParseResult = parsePropertyStringHandlingErrors(parseResult.value, compoundType)
+            if( compoundParseResult is ParsedProperty.Error ) {
+                parseError(WeaveParseError.InvalidPropertyValue(compoundParseResult.error), lineIndex, compoundParseResult.range.offset(parseResult.valueRange.first) )
+            }
             if(compoundParseResult is ParsedProperty.Compound && compoundParseResult.components.size == compoundProperty.components.size ) {
 
                 val actual = compoundParseResult.components
@@ -80,7 +92,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
                         )
                         if (targetProperty != null) {
                             if (parseResult.condition.isNotBlank()) {
-                                // TODO: Error, property conditions not allow except in style definitions
+                                parseError(WeaveParseError.PropertyConditionNotInStyle, lineIndex, parseResult.conditionRange)
                             }
                             if (targetProperty.multiInstanceAccumulator != null) {
                                 props.getOrPut(name, { mutableListOf() }).add(compoundParseResult)
@@ -94,7 +106,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
                             if (match.acceptsOtherProperties) {
                                 otherProps.getOrPut(name, { mutableListOf() }).add(compoundParseResult)
                             } else {
-                                // TODO: Error, unrecognized property
+                                parseError(WeaveParseError.UnrecognizedProperty(key), lineIndex, parseResult.nameRange)
                             }
                         }
 
@@ -105,12 +117,11 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
             if( match.acceptsOtherProperties ) {
                 otherProps.getOrPut(key,{mutableListOf()}).add(parseResult)
             } else {
-                // TODO: Error, unrecognized property
+                parseError(WeaveParseError.UnrecognizedProperty(key), lineIndex, parseResult.nameRange)
             }
         } else {
             if(parseResult.condition.isNotBlank()) {
-                // TODO: Error, property conditions not allow except in style definitions
-                parseError("Property conditions not allowed except in style definitions")
+                parseError(WeaveParseError.PropertyConditionNotInStyle, lineIndex, parseResult.conditionRange)
             }
             if(targetProperty.multiInstanceAccumulator!=null) {
                 props.getOrPut(key,{mutableListOf()}).add(parseResult)
@@ -130,12 +141,20 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
                     condition = if(parseResult.condition.isBlank()) {
                         null
                     } else {
-                        parsePropertyStringHandlingErrors(parseResult.condition, PropertyType.Expression)
+                        parsePropertyStringHandlingErrors(parseResult.condition, PropertyType.Expression).also { result ->
+                            if( result is ParsedProperty.Error ) {
+                                parseError(WeaveParseError.InvalidPropertyCondition(result.error), parseResult.lineNumber, result.range.offset(parseResult.conditionRange) )
+                            }
+                        }
                     },
                     value = parsePropertyStringHandlingErrors(
                         s = parseResult.value,
                         type = PropertyType.Expression      // TODO: This should handle situations like compound properties (for fonts)
-                    )
+                    ).also { result ->
+                        if( result is ParsedProperty.Error ) {
+                            parseError(WeaveParseError.InvalidPropertyValue(result.error), parseResult.lineNumber, result.range.offset(parseResult.valueRange) )
+                        }
+                    }
                 )
             }
         }
@@ -148,11 +167,18 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
         if( propLines.size == 1 ) {
             val propLine = propLines.first()
             val parsed = parsePropertyStringHandlingErrors(propLine.value, prop.type)
+            if( parsed is ParsedProperty.Error ) {
+                parseError(WeaveParseError.InvalidPropertyValue(parsed.error), propLine.lineNumber, parsed.range.offset(propLine.valueRange) )
+            }
             prop.update(parsed, propLine.lineNumber, propLine.nameRange, propLine.valueRange)
         } else if( propLines.size > 1 ) {
             val accumulator = prop.multiInstanceAccumulator ?: PropertyAccumulator.Sum
             val parsed = propLines.asSequence().map {
-                parsePropertyStringHandlingErrors(it.value, prop.type)
+                parsePropertyStringHandlingErrors(it.value, prop.type).also { result ->
+                    if( result is ParsedProperty.Error ) {
+                        parseError(WeaveParseError.InvalidPropertyValue(result.error), it.lineNumber, result.range.offset(it.valueRange) )
+                    }
+                }
             }.reduce { a, b ->
                 when {
                     a !is PropertyExpression -> b
@@ -184,7 +210,9 @@ fun interface PropertyAccumulator {
 
 fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedProperty{
     return runCatching { parsePropertyString(s,type) }
-        .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
+        .recover {
+            ParsedProperty.Error(it.message ?: it.toString(), null, (it as? PropertyExpressionParseException)?.range ?: IntRange.EMPTY)
+        }
         .getOrNull() ?: PropertyExpression.of("null")
 }
 

@@ -6,8 +6,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import com.prismatic.liveparser.LiveParse
-import com.prismatic.liveparser.rememberLiveParse
+import com.prismatic.liveparser.parser.LiveParse
+import com.prismatic.liveparser.parser.rememberLiveParse
 import com.prismatic.liveparser.weave.elements.ScriptingBlockElement
 import com.prismatic.liveparser.weave.elements.StyleElement
 

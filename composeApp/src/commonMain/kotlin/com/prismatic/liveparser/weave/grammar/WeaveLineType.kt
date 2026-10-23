@@ -1,6 +1,6 @@
 package com.prismatic.liveparser.weave.grammar
 
-import com.prismatic.liveparser.LiveParseLineType
+import com.prismatic.liveparser.parser.LiveParseLineType
 
 enum class WeaveLineType(override val isEntityStart: Boolean = false) : LiveParseLineType {
     None,

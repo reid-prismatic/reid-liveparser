@@ -132,7 +132,7 @@ sealed interface ParsedProperty {
      * It is `null` if that component is one that may be left out, and the string left it out.
      */
     data class Alternate(val index: Int, val value: ParsedProperty?) : ParsedProperty
-    data class Error(val error: String, val default: ParsedProperty?) : ParsedProperty
+    data class Error(val error: String, val default: ParsedProperty?, val range: IntRange) : ParsedProperty
 }
 
 /**

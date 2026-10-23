@@ -6,16 +6,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
+import com.prismatic.liveparser.weave.grammar.WeaveParseError
 import com.prismatic.liveparser.weave.grammar.isCodeBlockStart
 import com.prismatic.liveparser.weave.grammar.isScriptStart
+import com.prismatic.liveparser.weave.grammar.parseError
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
+import com.prismatic.liveparser.weave.properties.PropertyExpressionParseException
 import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.parsePropertyExpression
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.properties.provideVariables
+import com.prismatic.liveparser.weave.util.offset
 import kotlin.text.clear
 
 class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
@@ -46,27 +50,36 @@ class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
         if( languageSpec.isNotEmpty()) {
             codeLanguage = languageSpec
             variables.clear()
-        } else if( codeLines.all { it.isBlank() || it.isVariableAssignment()  } && !codeLines.all { it.isBlank() }) {
+        } else { //if( codeLines.all { it.isBlank() || it.isVariableAssignment()  } && !codeLines.all { it.isBlank() }) {
             codeLanguage = ""
             val unused = variables.keys.toMutableSet()
             val localVariables = mutableMapOf<String, PropertyExpression>()
             val exprContext = PropertyExpressionContext.Empty.provideVariables { localVariables[it] }
-            for (line in codeLines) {
-                val name = line.substringBefore('=',"").trim()
-                if( !name.isVariableName() )
+            for ((index, line) in codeLines.withIndex()) {
+                if( line.isBlank() ) continue
+                if( '=' !in line ) {
+                    parseError(WeaveParseError.NotAssignment, index+1, line.takeWhile { it.isWhitespace() }.count() .. line.length)
                     continue
-                val value = parsePropertyStringHandlingErrors(line.substringAfter('=').trim(), PropertyType.Expression)
+                }
+                val name = line.substringBefore('=',"").trim()
+                if( !name.isVariableName() ) {
+                    parseError(WeaveParseError.InvalidSymbolName(name), index+1, line.takeWhile { it.isWhitespace() }.count() ..< line.indexOf('='))
+                    continue
+                }
+                val value = parsePropertyStringHandlingErrors(line.substringAfter('='), PropertyType.Expression)
                 if( value is PropertyExpression ) {
                     val resolvedValue = value.evaluate(exprContext)
                     variables[name] = resolvedValue
                     localVariables[name] = resolvedValue
                     unused.remove(name)
+                } else if( value is ParsedProperty.Error ) {
+                    parseError(WeaveParseError.InvalidExpression(value.error), index+1, value.range.offset(line.indexOf('=')))
                 }
             }
             unused.forEach { variables.remove(it) }
-        } else {
-            variables.clear()
-            codeLanguage = ""
+//        } else {
+//            variables.clear()
+//            codeLanguage = ""
         }
 
     }
@@ -75,7 +88,7 @@ class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
 
 private fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedProperty{
     return runCatching { parsePropertyString(s,type) }
-        .recover { ParsedProperty.Error(it.message ?: it.toString(), null) }
+        .recover { ParsedProperty.Error(it.message ?: it.toString(), null, (it as? PropertyExpressionParseException)?.range ?: IntRange.EMPTY) }
         .getOrNull() ?: PropertyExpression.of("null")
 }
 

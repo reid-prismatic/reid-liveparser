@@ -1,10 +1,13 @@
-package com.prismatic.liveparser
+package com.prismatic.liveparser.parser
 
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import com.prismatic.liveparser.ChangedLinesInfo
+import com.prismatic.liveparser.changedLinesInfoFlow
+import com.prismatic.liveparser.isNewlineInsertion
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -14,17 +17,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.collections.forEachIndexed
 import kotlin.jvm.JvmInline
-
-data class SourceAddress(
-    /** Indicates the compilation unit if there are multiple compilation units */
-    val compilationUnit: String? = null,
-    /** The 1-based line number, relative to the start of the entity, or relative to the start of the compilation unit if [entityId] is [EntityId.None] */
-    val lineNumber: Int,
-    /** The ID of the entity that [lineNumber] is relative to, or [EntityId.None] if the line number is relative to the compilation unit*/
-    val entityId: EntityId = EntityId.None,
-    /** The range of characters in the line, or [IntRange.EMPTY] if there is no specific range */
-    val position: IntRange = IntRange.EMPTY
-)
 
 @Composable
 public fun <LineType:LiveParseLineType, EntityData:Any> TextFieldState.rememberLiveParse(
@@ -106,6 +98,15 @@ interface LiveParseEntityScope<LineType:LiveParseLineType,EntityData:Any> {
         errorData: Any? = null  // Extra data associated with the error, for uses like localization
     )
 }
+
+fun LiveParseEntityScope<*,*>.parseError(
+    message: String,
+    errorLine: Int,
+    errorRange: IntRange,
+    errorData: Any? = null  // Extra data associated with the error, for uses like localization
+) = parseError(message, errorLine, errorRange.first, if(errorRange.isEmpty()) 0 else errorRange.last-errorRange.first+1, errorData)
+
+
 
 data class LiveParseError(
     val message: String,
@@ -250,12 +251,16 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                         errorData: Any?
                     ) {
                         errors.add( LiveParseError(
-                            message,
-                            workingEntityStartLine + errorLine,
-                            errorColumn,
-                            sourceLength,
-                            errorData,
-                            workingEntityId,
+                            message = message,
+                            errorLine = if(errorLine >= 0 ) {
+                                workingEntityStartLine + errorLine + 1
+                            } else {
+                                workingEntityStartLine + 1
+                            },
+                            errorColumn = if(errorLine >= 0 && errorColumn >= 0) errorColumn else 0,
+                            sourceLength = sourceLength,
+                            errorData = errorData,
+                            entityId = workingEntityId,
                         ) )
                     }
                 }
@@ -345,6 +350,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                     _entities.removeAt(nextEntityIndex)
                 validateEntities()
 
+                errors.removeAll { err -> _entities.none { it.id == err.entityId } }
 
             }
         }

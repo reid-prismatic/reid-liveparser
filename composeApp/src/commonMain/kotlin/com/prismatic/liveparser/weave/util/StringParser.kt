@@ -1,7 +1,7 @@
 package com.prismatic.liveparser
 
+import com.prismatic.liveparser.weave.grammar.WeaveParseError
 import com.prismatic.liveparser.weave.properties.ParsedStringFragment
-import com.prismatic.liveparser.weave.properties.StringParseErrorType
 import com.prismatic.liveparser.weave.properties.isPropertyNameChar
 import com.prismatic.liveparser.weave.properties.isPropertyNameStartChar
 import com.prismatic.liveparser.weave.properties.isStyleNameChar
@@ -26,19 +26,19 @@ abstract class StringParser(val string: String) {
     }
     var failed = false
     var failureOffset = -1
-    var errorType: StringParseErrorType? = null
-    fun error(type: StringParseErrorType) : Nothing{
+    var errorType: WeaveParseError? = null
+    fun error(type: WeaveParseError) : Nothing{
         failed = true
         failureOffset=i
         errorType = type
         throw ParseFailure()
     }
     inline fun expect(char: Char) {
-        if( ch != char ) error(StringParseErrorType.UnexpectedChar(char,ch))
+        if( ch != char ) error(if(ch=='\u0000') WeaveParseError.UnexpectedEnd(char) else WeaveParseError.UnexpectedChar(char,ch))
         advance()
     }
     inline fun expectEnd() {
-        if( i < length ) error(StringParseErrorType.EndExpected)
+        if( i < length ) error(WeaveParseError.EndExpected)
     }
     inline fun extract(block:()->Unit) : ParsedStringFragment {
         val start = i
@@ -56,21 +56,21 @@ abstract class StringParser(val string: String) {
 
     fun parsePropertyName() = extract {
         if( !ch.isPropertyNameStartChar() )
-            error(StringParseErrorType.ExpectedPropertyName)
+            error(WeaveParseError.ExpectedPropertyName)
         advance()
         while( ch.isPropertyNameChar() ) {advance()}
     }
 
     fun parseStyleName() = extract{
         if(!ch.isStyleNameStartChar())
-            error(StringParseErrorType.ExpectedStyleName)
+            error(WeaveParseError.ExpectedStyleName)
         advance()
         while( ch.isStyleNameChar() ) {advance()}
     }
 
     fun parseTargetName() = extract{
         if(!ch.isTargetNameStartChar())
-            error(StringParseErrorType.ExpectedStyleName)
+            error(WeaveParseError.ExpectedStyleName)
         advance()
         while( ch.isTargetNameChar() ) {advance()}
     }
@@ -88,7 +88,7 @@ abstract class StringParser(val string: String) {
                     ')', '}', '}' -> {
                         if( bracketCount <= 0 ) break
                         if (brackets[bracketCount - 1] != ch)
-                            error(StringParseErrorType.MismatchedBracket)
+                            error(WeaveParseError.MismatchedBracket)
                         bracketCount--
                     }
                     '"', '\'' -> quoteChar = ch
@@ -96,7 +96,7 @@ abstract class StringParser(val string: String) {
             }
             advance()
         }
-        if( quoteChar != '\u0000' ) error(StringParseErrorType.UnterminatedQuote)
-        if( bracketCount > 0 ) error(StringParseErrorType.MismatchedBracket)
+        if( quoteChar != '\u0000' ) error(WeaveParseError.UnterminatedQuote)
+        if( bracketCount > 0 ) error(WeaveParseError.MismatchedBracket)
     }
 }

@@ -20,6 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -30,6 +33,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.prismatic.liveparser.parser.LiveParseEntity
+import com.prismatic.liveparser.parser.LiveParseError
+import com.prismatic.liveparser.parser.LiveParseLine
 import com.prismatic.liveparser.weave.elements.TextElement
 import com.prismatic.liveparser.weave.elements.VoiceoverElement
 import com.prismatic.liveparser.weave.grammar.*
@@ -88,6 +94,7 @@ fun WeaveLiveParseTestUI() {
                         .fillMaxSize()
                         .padding(top = 3.dp)
                         .drawLineNumbers(textLayoutResult, 30.dp, textFieldScrollState.value)
+                        .drawErrors(liveParse.errors, textLayoutResult, 45.dp, textFieldScrollState.value)
                         .padding(start = 45.dp)
                         .verticalScroll(textFieldScrollState),
                     onTextLayout = {
@@ -97,7 +104,7 @@ fun WeaveLiveParseTestUI() {
             }
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
                 items(liveParse.errors) { error ->
-                    Text("${error.errorLine}: ${error.message}", color = Color.Red)
+                    Text("${error.errorLine}: ${error.message}", color = Color.Red, style = TextStyle(fontSize = 10.sp, lineHeight = 10.sp))
                 }
                 items(liveParse.entities, {it.id}) { entity ->
                     val selected = selectedLine in entity.startLine ..entity.endLine
@@ -297,6 +304,59 @@ fun Modifier.drawLineNumbers(layoutResult: TextLayoutResult?, width: Dp, scrollO
                 val baseline = layoutResult.getLineBaseline(i)
                 val number = measurer.measure(lineNumber.toString())
                 drawText(number, topLeft = Offset(width.toPx() - number.size.width, baseline-number.firstBaseline - scrollOffset), color = Color.DarkGray)
+            }
+        }
+    }
+}
+
+@Composable
+fun Modifier.drawErrors(errors: List<LiveParseError>, layoutResult: TextLayoutResult?, leftOffset: Dp, scrollOffset: Int): Modifier {
+    val measurer = rememberTextMeasurer()
+    return this then Modifier.drawBehind {
+        if(layoutResult == null || layoutResult.layoutInput.text.isEmpty()) return@drawBehind
+        var lineNumber = 0
+        val leftOffsetPx = leftOffset.toPx()
+        for (i in 0 ..< layoutResult.lineCount) {
+            val lineStart = layoutResult.getLineStart(i)
+            val isLineStart = lineStart<=0 || layoutResult.layoutInput.text[lineStart-1] == '\n'
+            if(isLineStart) {
+                lineNumber++
+                errors.forEach {
+                    if( it.errorLine == lineNumber ) {
+                        val baseline = layoutResult.getLineBaseline(i)
+                        val y = baseline - scrollOffset + 2.dp.toPx()
+                        val thickness = 1.5.dp.toPx()
+                        val left = layoutResult.multiParagraph.getLineLeft(i) + leftOffsetPx
+                        val right = layoutResult.multiParagraph.getLineRight(i) + leftOffsetPx
+                        if( it.errorColumn >= 0 ) {
+                            val underlineLeft = layoutResult.multiParagraph.getHorizontalPosition((lineStart+it.errorColumn).coerceAtMost(layoutResult.layoutInput.text.length-1), true)
+                            val colRight = layoutResult.multiParagraph.getHorizontalPosition((lineStart+it.errorColumn+it.sourceLength).coerceAtMost(layoutResult.layoutInput.text.length-1), true)
+                            val underlineRight = colRight.coerceAtLeast(underlineLeft+5.dp.toPx())
+                            drawLine(
+                                color = Color.Red,
+                                start = Offset(left + underlineLeft, y),
+                                end = Offset(left + underlineRight, y),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(),2.dp.toPx())),
+                                strokeWidth = thickness
+                            )
+                            val center = left + (underlineLeft + underlineLeft)/2
+                            drawPath(Path().apply {
+                                moveTo(center, y)
+                                lineTo(center - 5.dp.toPx(), y + 5.dp.toPx())
+                                lineTo(center + 5.dp.toPx(), y + 5.dp.toPx())
+                                close()
+                            }, Color.Red)
+                        } else {
+                            drawLine(
+                                color = Color.Red,
+                                start = Offset(left, y),
+                                end = Offset(right, y),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(),2.dp.toPx())),
+                                strokeWidth = thickness
+                            )
+                        }
+                    }
+                }
             }
         }
     }
