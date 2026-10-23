@@ -96,6 +96,9 @@ fun WeaveLiveParseTestUI() {
                 )
             }
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
+                items(liveParse.errors) { error ->
+                    Text("${error.errorLine}: ${error.message}", color = Color.Red)
+                }
                 items(liveParse.entities, {it.id}) { entity ->
                     val selected = selectedLine in entity.startLine ..entity.endLine
 

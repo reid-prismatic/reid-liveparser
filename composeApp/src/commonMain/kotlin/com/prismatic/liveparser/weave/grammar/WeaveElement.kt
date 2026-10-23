@@ -110,6 +110,7 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
         } else {
             if(parseResult.condition.isNotBlank()) {
                 // TODO: Error, property conditions not allow except in style definitions
+                parseError("Property conditions not allowed except in style definitions")
             }
             if(targetProperty.multiInstanceAccumulator!=null) {
                 props.getOrPut(key,{mutableListOf()}).add(parseResult)
