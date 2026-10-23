@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.toStringAsFixed
+import com.prismatic.liveparser.weave.types.WeavePercent
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -381,6 +382,7 @@ sealed class PropertyExpression : ParsedProperty {
                 is FrameRate -> FrameRateLiteral(value)
                 is FontWeight -> IntegerLiteral(value.weight.toLong())
                 is FontStyle -> StringLiteral(value.value.toString())
+                is WeavePercent -> PercentageLiteral(value.percent.toDouble())
                 is Pair<*,*> if value.first is Int && value.second is Int -> RatioLiteral(value.first as Int, value.second as Int)
                 else -> throw IllegalArgumentException("Cannot convert ${value?.let { it::class.simpleName}} to PropertyExpression")
             }

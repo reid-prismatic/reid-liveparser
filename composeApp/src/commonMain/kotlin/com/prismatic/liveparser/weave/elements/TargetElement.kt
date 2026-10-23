@@ -4,12 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.weave.grammar.DefinitionElement
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import org.prismatic.opus.time.fps
 
-class TargetElement() : DefinitionElement<TargetElement>(
+class TargetElement private constructor(pm: PropertyManager) : DefinitionElement<TargetElement>(
+    propertyManager = pm,
     namespace = "target",
     shorthandRecognizer = {false}
-) {
+) { constructor() : this(PropertyManager()) 
     override val elementTypeName: String get() = "Target"
     var targetName by mutableStateOf("")
     val ratio by prop(16 to 9)

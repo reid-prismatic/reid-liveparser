@@ -3,11 +3,20 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.prismatic.liveparser.weave.elements.generic.LayoutProperties
+import com.prismatic.liveparser.weave.elements.generic.LayoutPropertiesImpl
+import com.prismatic.liveparser.weave.elements.generic.TimingProperties
+import com.prismatic.liveparser.weave.elements.generic.TimingPropertiesImpl
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
 import com.prismatic.liveparser.weave.grammar.isCodeBlockStart
 
-class CodeBlockElement() : TypedWeaveElement<CodeBlockElement>() {
+class CodeBlockElement private constructor(pm: PropertyManager) :
+    LayoutProperties by LayoutPropertiesImpl(pm),
+    TimingProperties by TimingPropertiesImpl(pm),
+    TypedWeaveElement<CodeBlockElement>(pm)
+{ constructor() : this(PropertyManager())
 
     var codeLanguage: String by mutableStateOf("")
         private set

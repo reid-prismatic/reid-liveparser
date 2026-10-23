@@ -3,6 +3,9 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.prismatic.liveparser.weave.elements.generic.LayoutPropertiesImpl
+import com.prismatic.liveparser.weave.elements.generic.TimingPropertiesImpl
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
 import com.prismatic.liveparser.weave.grammar.isCodeBlockStart
@@ -17,7 +20,9 @@ import com.prismatic.liveparser.weave.properties.evaluate
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import kotlin.time.Duration.Companion.seconds
 
-class DelayElement() : TypedWeaveElement<DelayElement>() {
+class DelayElement private constructor(pm: PropertyManager) :
+    TypedWeaveElement<DelayElement>(pm)
+{ constructor() : this(PropertyManager())
 
     var delay by mutableStateOf<PropertyExpression?>(null)
         private set

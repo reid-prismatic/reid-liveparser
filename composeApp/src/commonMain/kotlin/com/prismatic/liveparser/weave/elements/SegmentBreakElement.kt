@@ -3,6 +3,7 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyExpressionContext
 import com.prismatic.liveparser.weave.properties.PropertyType
@@ -13,7 +14,9 @@ import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
 import com.prismatic.liveparser.weave.grammar.isSegmentBreak
 
-class SegmentBreakElement() : TypedWeaveElement<SegmentBreakElement>() {
+class SegmentBreakElement private constructor(pm: PropertyManager)
+    : TypedWeaveElement<SegmentBreakElement>(pm)
+{ constructor() : this(PropertyManager())
     override val elementTypeName: String get() = "Break"
     var transition by mutableStateOf<ParsedProperty?>(null)
     override fun WeaveEntityParseScope.recognize(): Boolean = firstLine.isSegmentBreak

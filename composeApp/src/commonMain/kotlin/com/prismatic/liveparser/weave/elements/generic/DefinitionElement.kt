@@ -1,9 +1,10 @@
 package com.prismatic.liveparser.weave.grammar
 
 abstract class DefinitionElement<T: DefinitionElement<T>>(
+    propertyManager: PropertyManager,
     val namespace: String,
     val shorthandRecognizer: WeaveEntityParseScope.() -> Boolean = { false }
-) : TypedWeaveElement<T>() {
+) : TypedWeaveElement<T>(propertyManager) {
     override fun WeaveEntityParseScope.recognize(): Boolean = isDefinitionEntity(namespace) || shorthandRecognizer()
     final override fun WeaveEntityParseScope.parse() {
         if(firstLine.isDefinitionEntityStart) {

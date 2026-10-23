@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.TypedWeaveElement
 import com.prismatic.liveparser.weave.grammar.WeaveEntityParseScope
 import com.prismatic.liveparser.weave.grammar.WeaveParseError
@@ -22,7 +23,9 @@ import com.prismatic.liveparser.weave.properties.provideVariables
 import com.prismatic.liveparser.weave.util.offset
 import kotlin.text.clear
 
-class ScriptingBlockElement() : TypedWeaveElement<ScriptingBlockElement>() {
+class ScriptingBlockElement private constructor(pm: PropertyManager) :
+    TypedWeaveElement<ScriptingBlockElement>(pm)
+{ constructor() : this(PropertyManager())
 
     var codeLanguage: String by mutableStateOf("")
         private set

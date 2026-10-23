@@ -3,17 +3,24 @@ package com.prismatic.liveparser.weave.elements
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.prismatic.liveparser.weave.elements.generic.*
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.isConcreteEntityStart
-import org.prismatic.opus.time.MediaTime
 
-class MediaElement() : ConcreteElement<MediaElement>(
-    namespace = "media",
-    shorthandRecognizer = { firstLine.isConcreteEntityStart && ":" !in firstLine.body && "." in firstLine.body }
-) {
+class MediaElement private constructor(pm: PropertyManager) :
+    LayoutProperties by LayoutPropertiesImpl(pm),
+    TimingProperties by TimingPropertiesImpl(pm),
+    TransformProperties by TransformPropertiesImpl(pm),
+    AudioProperties by AudioPropertiesImpl(pm),
+    ConcreteElement<MediaElement>(
+        propertyManager = pm,
+        namespace = "media",
+        shorthandRecognizer = { firstLine.isConcreteEntityStart && ":" !in firstLine.body && "." in firstLine.body }
+    ) { constructor() : this(PropertyManager())
+
     override val elementTypeName: String get() = "Media"
     var filename : String by mutableStateOf("")
-    val duration by prop(MediaTime.Unspecified)
     override fun parseArguments(arguments: String) {
         filename = arguments
     }

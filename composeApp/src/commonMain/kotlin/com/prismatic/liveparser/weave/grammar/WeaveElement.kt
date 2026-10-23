@@ -11,7 +11,6 @@ import com.prismatic.liveparser.parser.EntityId
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.parser.LiveParseEntityScope
 import com.prismatic.liveparser.offsetToStartOfLine
-import com.prismatic.liveparser.parser.parseError
 import com.prismatic.liveparser.weave.properties.ParsedProperty
 import com.prismatic.liveparser.weave.properties.PropertyDataType
 import com.prismatic.liveparser.weave.properties.PropertyExpression
@@ -19,9 +18,18 @@ import com.prismatic.liveparser.weave.properties.PropertyType
 import com.prismatic.liveparser.weave.properties.parsePropertyString
 import com.prismatic.liveparser.weave.ALL_ELEMENT_TYPES
 import com.prismatic.liveparser.weave.elements.ErrorElement
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.CompoundPropMember
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.CompoundPropProvider
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.CompoundPropertyDefScope
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.MultiPropMember
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.MultiPropProvider
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.PropMember
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.PropProvider
+import com.prismatic.liveparser.weave.grammar.TypedWeaveElement.SinglePropertyDefScope
 import com.prismatic.liveparser.weave.properties.PropertyExpressionParseException
 import com.prismatic.liveparser.weave.properties.PropertyLineParseResult
 import com.prismatic.liveparser.weave.properties.parsePropertyLine
+import com.prismatic.liveparser.weave.types.WeavePercent
 import com.prismatic.liveparser.weave.util.offset
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
@@ -36,6 +44,7 @@ import org.prismatic.opus.time.millis
 import org.prismatic.opus.time.nanos
 import org.prismatic.opus.time.seconds
 import kotlin.collections.iterator
+import kotlin.collections.plus
 import kotlin.reflect.KProperty
 
 fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(liveParseConnection: WeaveLiveParseConnection): WeaveElement {
@@ -232,6 +241,11 @@ fun WeaveEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
             && ':' in firstLine.trimmedBody
             && firstLine.trimmedBody.trim().removeSurrounding("{","}").substringBefore(':').trim() == namespace
 
+typealias Vec2Prop = WeaveElement.Prop<Vec2>
+typealias TimeProp = WeaveElement.Prop<Time>
+typealias IntProp = WeaveElement.Prop<Int>
+typealias PercentProp = WeaveElement.Prop<WeavePercent>
+
 interface WeaveElement {
     val elementTypeName: String
 
@@ -276,14 +290,58 @@ interface WeaveElement {
     val compoundPropertyList : List<CompoundProperty>
 
 }
-abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
 
-    var liveParseConnection: WeaveLiveParseConnection? = null
-    var entityId: EntityId = EntityId.None
+interface PropertyHolder {
 
-    abstract fun makeInstance() : T
+    fun <T> propProvider(
+        defaultValue: T,
+        key: String? = null,
+        type: PropertyType,
+        def:(SinglePropertyDefScope.()->Unit)?
+//        parser: (String) -> T?
+    ) : PropProvider<T>
 
-    override fun makeInstanceGeneric() = makeInstance()
+    fun compoundPropProvider(
+        components: List<WeaveElement.Prop<*>>,
+        def:(CompoundPropertyDefScope.()->Unit)?
+    ) : CompoundPropProvider
+
+    fun multiPropProvider() : MultiPropProvider
+
+    val acceptsOtherProperties : Boolean
+    val propertyList : List<WeaveElement.Prop<*>>
+    val compoundPropertyList : List<WeaveElement.CompoundProperty>
+
+    val otherProperties: List<PropertyLine>
+
+    fun prop(defaultValue: Int, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Float, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Double, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Long, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
+    fun prop(defaultValue: Time, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Time> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Time), def=def)
+    fun prop(defaultValue: Color, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Color> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Color), def=def)
+    fun prop(defaultValue: String, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
+    fun prop(defaultValue: Vec2, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
+    fun prop(defaultValue: WeavePercent, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<WeavePercent> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Percent), def=def)
+    fun prop(defaultValue: Pair<Int,Int>, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
+    fun prop(defaultValue: Vec3, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
+    fun prop(defaultValue: Vec4, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
+    fun prop(defaultValue: FrameRate, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
+    fun prop(defaultValue: WeaveDimension, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
+    fun prop(defaultValue: FontWeight, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
+        propProvider(defaultValue, type = PropertyType.Alternate(
+            PropertyType.UnquotedStringEnum("Thin","ExtraLight","Light","Normal","Medium","SemiBold","Bold","ExtraBold","Black"),
+            PropertyType.TypedExpression(PropertyDataType.Integer)
+        ), def=def)
+    fun prop(defaultValue: FontStyle, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
+    fun prop(vararg components: WeaveElement.Prop<*>, def:(CompoundPropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList(), def)
+    fun otherProps(): MultiPropProvider = multiPropProvider()
+}
+
+class PropertyManager : PropertyHolder {
+
+    final override var acceptsOtherProperties : Boolean = false
+        private set
 
     final override var propertyList : List<WeaveElement.Prop<*>> = emptyList()
         private set
@@ -291,23 +349,10 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
     final override var compoundPropertyList : List<WeaveElement.CompoundProperty> = emptyList()
         private set
 
-    final override var styles: List<String> by mutableStateOf(emptyList())
-        private set
-    final override var targets: List<String> by mutableStateOf(emptyList())
-        private set
-    override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
-    override val compoundProperties: Map<String, WeaveElement.CompoundProperty> by lazy {compoundPropertyList.associateBy { it.key }}
     final override val otherProperties: List<PropertyLine> field = mutableStateListOf()
-    final override var acceptsOtherProperties : Boolean = false
-        private set
 
-    fun updateStyles(styles: List<String>) {
-        this.styles = styles
-    }
-
-    fun updateTargets(targets: List<String>) {
-        this.targets = targets
-    }
+    var liveParseConnection: WeaveLiveParseConnection? = null
+    var entityId: EntityId = EntityId.None
 
     fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
         // TODO: change the following to only set property lines that have changed, to reduce state changes
@@ -315,17 +360,79 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
         otherProperties.addAll(otherPropLines)
     }
 
-
-    interface PropMember<T> {
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T>
+    override fun compoundPropProvider(
+        components: List<WeaveElement.Prop<*>>,
+        def:(CompoundPropertyDefScope.()->Unit)?
+    ) : CompoundPropProvider {
+        return object : CompoundPropProvider, CompoundPropertyDefScope {
+            override fun provideDelegate(
+                thisRef: Any?,
+                prop: KProperty<*>
+            ): CompoundPropMember {
+                val compoundProp : WeaveElement.CompoundProperty = CompoundPropertyImpl(components, prop.name, displayName ?: prop.name)
+                compoundPropertyList += compoundProp
+                return object : CompoundPropMember {
+                    override fun getValue(thisRef: Any?, property: KProperty<*>) : WeaveElement.CompoundProperty {
+                        return compoundProp
+                    }
+                }
+            }
+            override var displayName: String? = null
+        }.also{def?.invoke(it)}
     }
 
-    interface MultiPropMember {
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): List<PropertyLine>
+    override fun multiPropProvider() : MultiPropProvider {
+        check(!acceptsOtherProperties)
+        acceptsOtherProperties = true
+        return object : MultiPropProvider {
+            override fun provideDelegate(
+                thisRef: Any?,
+                prop: KProperty<*>
+            ): MultiPropMember {
+                val liveProp = MultiPropImpl()
+                return liveProp
+            }
+        }
     }
 
-    interface CompoundPropMember {
-        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.CompoundProperty
+    override fun <T> propProvider(
+        defaultValue: T,
+        key: String?,
+        type: PropertyType,
+        def:(SinglePropertyDefScope.()->Unit)?
+//        parser: (String) -> T?
+    ) : PropProvider<T> {
+        return object : PropProvider<T>, SinglePropertyDefScope {
+            var multiInstanceAccumulator: PropertyAccumulator? = null
+            var acceptUnquotedString = false
+            override var displayName: String? = null
+            override fun accumulateMultipleInstances(accumulator: PropertyAccumulator) {
+                check(multiInstanceAccumulator==null)
+                multiInstanceAccumulator = accumulator
+            }
+
+            override fun acceptUnquotedString() {
+                acceptUnquotedString = true
+            }
+            override fun provideDelegate(
+                thisRef: Any?,
+                prop: KProperty<*>
+            ): PropMember<T> {
+                val liveProp = PropImpl(
+                    defaultValue = defaultValue,
+                    key = key ?: prop.name,
+                    displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
+                    type = when {
+                        acceptUnquotedString -> PropertyType.Alternate(PropertyType.UnquotedStringLiteral, type)
+                        else -> type
+                    },
+                    multiInstanceAccumulator = multiInstanceAccumulator
+//                    parser = parser
+                )
+                propertyList += liveProp
+                return liveProp
+            }
+        }.also{def?.invoke(it)}
     }
 
     private inner class CompoundPropertyImpl(
@@ -391,6 +498,55 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
         override val isSpecified: Boolean get() = propValue != null
         override fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T> = this@PropImpl
     }
+}
+
+abstract class TypedWeaveElement<T: TypedWeaveElement<T>>(private val propertyManager: PropertyManager) : WeaveElement, PropertyHolder by propertyManager {
+
+    var liveParseConnection: WeaveLiveParseConnection?
+        get() = propertyManager.liveParseConnection
+        set(value) { propertyManager.liveParseConnection = value }
+
+    var entityId: EntityId
+        get() = propertyManager.entityId
+        set(value) { propertyManager.entityId = value }
+
+    override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
+    override val compoundProperties: Map<String, WeaveElement.CompoundProperty> by lazy {compoundPropertyList.associateBy { it.key }}
+
+    abstract fun makeInstance() : T
+
+    override fun makeInstanceGeneric() = makeInstance()
+
+    final override var styles: List<String> by mutableStateOf(emptyList())
+        private set
+    final override var targets: List<String> by mutableStateOf(emptyList())
+        private set
+
+    fun updateStyles(styles: List<String>) {
+        this.styles = styles
+    }
+
+    fun updateTargets(targets: List<String>) {
+        this.targets = targets
+    }
+
+    fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
+        propertyManager.updateOtherProperties(otherPropLines)
+    }
+
+
+    interface PropMember<T> {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.Prop<T>
+    }
+
+    interface MultiPropMember {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): List<PropertyLine>
+    }
+
+    interface CompoundPropMember {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): WeaveElement.CompoundProperty
+    }
+
     interface PropProvider<T> {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): PropMember<T>
     }
@@ -416,106 +572,10 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>> : WeaveElement {
         fun accumulateMultipleInstances(accumulator: PropertyAccumulator)
         fun acceptUnquotedString()
     }
-
-    fun prop(defaultValue: Int, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Int> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Float, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Float> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Double, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Double> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Long, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Long> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Number), def=def)
-    fun prop(defaultValue: Time, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Time> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Time), def=def)
-    fun prop(defaultValue: Color, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Color> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Color), def=def)
-    fun prop(defaultValue: String, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<String> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.String), def=def)
-    fun prop(defaultValue: Vec2, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec2> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec2), def=def)
-    fun prop(defaultValue: Pair<Int,Int>, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Pair<Int,Int>> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Ratio), def=def)
-    fun prop(defaultValue: Vec3, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec3> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec3), def=def)
-    fun prop(defaultValue: Vec4, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<Vec4> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Vec4), def=def)
-    fun prop(defaultValue: FrameRate, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FrameRate> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.FrameRate), def=def)
-    fun prop(defaultValue: WeaveDimension, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<WeaveDimension> = propProvider(defaultValue, type = PropertyType.TypedExpression(PropertyDataType.Dimension), def=def)
-    fun otherProps(): MultiPropProvider {
-        check(!acceptsOtherProperties)
-        acceptsOtherProperties = true
-        return multiPropProvider()
-    }
-    fun prop(defaultValue: FontWeight, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontWeight> =
-        propProvider(defaultValue, type = PropertyType.Alternate(
-            PropertyType.UnquotedStringEnum("Thin","ExtraLight","Light","Normal","Medium","SemiBold","Bold","ExtraBold","Black"),
-            PropertyType.TypedExpression(PropertyDataType.Integer)
-        ), def=def)
-    fun prop(defaultValue: FontStyle, def:(SinglePropertyDefScope.()->Unit)?=null): PropProvider<FontStyle> = propProvider(defaultValue, type = PropertyType.UnquotedStringEnum("Italic","Regular"), def=def)
-    fun prop(vararg components: WeaveElement.Prop<*>, def:(CompoundPropertyDefScope.()->Unit)?=null) : CompoundPropProvider = compoundPropProvider(components.toList(), def)
-
-    fun compoundPropProvider(
-        components: List<WeaveElement.Prop<*>>,
-        def:(CompoundPropertyDefScope.()->Unit)?
-    ) : CompoundPropProvider {
-        return object : CompoundPropProvider, CompoundPropertyDefScope {
-            override fun provideDelegate(
-                thisRef: Any?,
-                prop: KProperty<*>
-            ): CompoundPropMember {
-                val compoundProp : WeaveElement.CompoundProperty = CompoundPropertyImpl(components, prop.name, displayName ?: prop.name)
-                compoundPropertyList += compoundProp
-                return object : CompoundPropMember {
-                    override fun getValue(thisRef: Any?, property: KProperty<*>) : WeaveElement.CompoundProperty {
-                        return compoundProp
-                    }
-                }
-            }
-            override var displayName: String? = null
-        }.also{def?.invoke(it)}
-    }
-
-    fun multiPropProvider() : MultiPropProvider {
-        return object : MultiPropProvider {
-            override fun provideDelegate(
-                thisRef: Any?,
-                prop: KProperty<*>
-            ): MultiPropMember {
-                val liveProp = MultiPropImpl()
-                return liveProp
-            }
-        }
-    }
-
-    fun <T> propProvider(
-        defaultValue: T,
-        key: String? = null,
-        type: PropertyType,
-        def:(SinglePropertyDefScope.()->Unit)?
-//        parser: (String) -> T?
-    ) : PropProvider<T> {
-        return object : PropProvider<T>, SinglePropertyDefScope {
-            var multiInstanceAccumulator: PropertyAccumulator? = null
-            var acceptUnquotedString = false
-            override var displayName: String? = null
-            override fun accumulateMultipleInstances(accumulator: PropertyAccumulator) {
-                check(multiInstanceAccumulator==null)
-                multiInstanceAccumulator = accumulator
-            }
-
-            override fun acceptUnquotedString() {
-                acceptUnquotedString = true
-            }
-            override fun provideDelegate(
-                thisRef: Any?,
-                prop: KProperty<*>
-            ): PropMember<T> {
-                val liveProp = PropImpl(
-                    defaultValue = defaultValue,
-                    key = key ?: prop.name,
-                    displayName = displayName ?: (key ?: prop.name).apply { take(1).uppercase() + drop(1) },
-                    type = when {
-                        acceptUnquotedString -> PropertyType.Alternate(PropertyType.UnquotedStringLiteral, type)
-                        else -> type
-                    },
-                    multiInstanceAccumulator = multiInstanceAccumulator
-//                    parser = parser
-                )
-                propertyList += liveProp
-                return liveProp
-            }
-        }.also{def?.invoke(it)}
-    }
 }
+
+fun SinglePropertyDefScope.sumMultipleInstances() = accumulateMultipleInstances(PropertyAccumulator.Sum)
+fun SinglePropertyDefScope.multiplyMultipleInstances() = accumulateMultipleInstances(PropertyAccumulator.Product)
 
 class PropertyLine(val name: String, val value: ParsedProperty, val condition: ParsedProperty?)
 

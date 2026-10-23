@@ -7,17 +7,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.pt
+import com.prismatic.liveparser.weave.elements.generic.LayoutProperties
+import com.prismatic.liveparser.weave.elements.generic.LayoutPropertiesImpl
+import com.prismatic.liveparser.weave.elements.generic.TimingProperties
+import com.prismatic.liveparser.weave.elements.generic.TimingPropertiesImpl
+import com.prismatic.liveparser.weave.elements.generic.TransformProperties
+import com.prismatic.liveparser.weave.elements.generic.TransformPropertiesImpl
 import com.prismatic.liveparser.weave.grammar.ConcreteElement
-import com.prismatic.liveparser.weave.grammar.PropertyAccumulator
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.isTextEntityStart
 import com.prismatic.liveparser.weave.grammar.textEntityPrefixes
-import org.prismatic.opus.math.Vec2
-import org.prismatic.opus.time.MediaTime
 
-class TextElement() : ConcreteElement<TextElement>(
-    namespace = "text",
-    shorthandRecognizer = { firstLine.isTextEntityStart }
-) {
+class TextElement private constructor(pm: PropertyManager) :
+    LayoutProperties by LayoutPropertiesImpl(pm),
+    TimingProperties by TimingPropertiesImpl(pm),
+    TransformProperties by TransformPropertiesImpl(pm),
+    ConcreteElement<TextElement>(
+        propertyManager = pm,
+        namespace = "text",
+        shorthandRecognizer = { firstLine.isTextEntityStart }
+    ) { constructor() : this(PropertyManager())
+
     override val elementTypeName: String get() = "Text"
 
     var text : String by mutableStateOf("")
@@ -30,12 +40,7 @@ class TextElement() : ConcreteElement<TextElement>(
     val fontStyle by prop(FontStyle.Normal)
     val font by prop(fontSize, typeface, weight, fontStyle)
     var textType : String by mutableStateOf("")
-    val position by prop(Vec2.ZERO)
-    val duration by prop(MediaTime.Unspecified)
     val color by prop(Color.Black)
-    val offset by prop(Vec2.ZERO) {
-        accumulateMultipleInstances(PropertyAccumulator.Sum)
-    }
 
     override fun parseBody(bodyLines: List<String>) {
         text = bodyLines.joinToString("\n") {

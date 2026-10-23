@@ -5,16 +5,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.prismatic.liveparser.StringParser
 import com.prismatic.liveparser.weave.grammar.DefinitionElement
+import com.prismatic.liveparser.weave.grammar.PropertyManager
 import com.prismatic.liveparser.weave.grammar.WeaveParseError
 import com.prismatic.liveparser.weave.grammar.isStyleEntityStart
 import com.prismatic.liveparser.weave.properties.ParsedStringFragment
 import com.prismatic.liveparser.weave.properties.PropertyExpression
 import com.prismatic.liveparser.weave.properties.parsePropertyExpression
 
-class StyleElement() : DefinitionElement<StyleElement>(
+class StyleElement private constructor(pm: PropertyManager) : DefinitionElement<StyleElement>(
+    propertyManager = pm,
     namespace = "style",
     shorthandRecognizer = { firstLine.isStyleEntityStart },
-) {
+) { constructor() : this(PropertyManager())
     override val elementTypeName: String get() = "Style"
     val styleDescription by prop("")
     val styleProperties by otherProps()
