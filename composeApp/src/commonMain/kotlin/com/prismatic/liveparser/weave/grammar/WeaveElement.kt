@@ -1,5 +1,6 @@
 package com.prismatic.liveparser.weave.grammar
 
+import androidx.compose.foundation.text.input.insert
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -198,6 +199,8 @@ fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(livePars
             prop.update(parsed, propLines.last().lineNumber, propLines.last().nameRange, propLines.last().valueRange)
         }
     }
+    val lastNonBlankLine = entityLines.indexOfLast { it.isNotBlank() }
+    inst.newPropertyInsertionLine = if(lastNonBlankLine < 0) entityLines.size+1 else lastNonBlankLine+1
     (inst.properties.keys - props.keys).forEach {inst.properties[it]?.update(null)}
     with(inst) {
         scope.parse()
@@ -353,6 +356,7 @@ class PropertyManager : PropertyHolder {
 
     var liveParseConnection: WeaveLiveParseConnection? = null
     var entityId: EntityId = EntityId.None
+    var newPropertyInsertionLine: Int = -1
 
     fun updateOtherProperties(otherPropLines: List<PropertyLine>) {
         // TODO: change the following to only set property lines that have changed, to reduce state changes
@@ -487,11 +491,21 @@ class PropertyManager : PropertyHolder {
             val lineStart = tfs.text.offsetToStartOfLine(propEntity.startLine + lineNumber)
             if( lineStart < 0 ) return
             if( valueRange.isEmpty() ) {
-                // TODO: Create property
-                return
-            }
-            tfs.edit {
-                replace(lineStart + valueRange.first, lineStart + valueRange.last+1, newValue)
+                val endOfEntity = tfs.text.offsetToStartOfLine(propEntity.startLine + newPropertyInsertionLine)
+                val propLineText = "- $key: $newValue"
+                tfs.edit {
+                    if( endOfEntity < 0 ) {
+                        if( !originalText.endsWith('\n') )
+                            appendLine()
+                        appendLine(propLineText)
+                    } else {
+                        insert(endOfEntity, "$propLineText\n")
+                    }
+                }
+            } else {
+                tfs.edit {
+                    replace(lineStart + valueRange.first, lineStart + valueRange.last + 1, newValue)
+                }
             }
         }
 
@@ -509,6 +523,10 @@ abstract class TypedWeaveElement<T: TypedWeaveElement<T>>(private val propertyMa
     var entityId: EntityId
         get() = propertyManager.entityId
         set(value) { propertyManager.entityId = value }
+
+    var newPropertyInsertionLine: Int
+        get() = propertyManager.newPropertyInsertionLine
+        set(value) { propertyManager.newPropertyInsertionLine = value }
 
     override val properties: Map<String, WeaveElement.Prop<*>> by lazy {propertyList.associateBy { it.key }}
     override val compoundProperties: Map<String, WeaveElement.CompoundProperty> by lazy {compoundPropertyList.associateBy { it.key }}
