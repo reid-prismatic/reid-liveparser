@@ -260,6 +260,9 @@ fun WeaveEntityParseScope.isDefinitionEntity(namespace: String) : Boolean =
             && firstLine.trimmedBody.trim().removeSurrounding("{","}").substringBefore(':').trim() == namespace
 
 typealias Vec2Prop = WeaveElement.Prop<Vec2>
+typealias Vec3Prop = WeaveElement.Prop<Vec3>
+typealias Vec4Prop = WeaveElement.Prop<Vec4>
+typealias ColorProp = WeaveElement.Prop<Color>
 typealias TimeProp = WeaveElement.Prop<Time>
 typealias IntProp = WeaveElement.Prop<Int>
 typealias PercentProp = WeaveElement.Prop<WeavePercent>
@@ -292,6 +295,7 @@ interface WeaveElement {
 
     interface Prop<T> : PropInfo {
         val type: PropertyType
+        val defaultValue: T
         val multiInstanceAccumulator: PropertyAccumulator?
         val isSpecified: Boolean
         fun update(value: ParsedProperty?, lineNumber: Int = -1, nameRange: IntRange = IntRange.EMPTY, valueRange: IntRange = IntRange.EMPTY)
@@ -304,9 +308,6 @@ interface WeaveElement {
         val valueRange: IntRange
     }
 
-    val propertyList : List<Prop<*>>
-    val compoundPropertyList : List<CompoundProperty>
-
 }
 
 fun WeaveElement.Prop<*>.editVectorValue(vararg components: Float) {
@@ -317,7 +318,6 @@ fun WeaveElement.Prop<*>.editVectorValue(vararg components: Float) {
             s = s.dropLast(1)
         componentStings[i] = s
     }
-    componentStings
     if( componentStings.all { it.endsWith(".0") }) {
         for( i in componentStings.indices ) {
             componentStings[i] = componentStings[i].dropLast(2)
@@ -344,9 +344,10 @@ fun WeaveElement.Prop<*>.editValue(newValue: Color) {
 }
 
 fun WeaveElement.Prop<*>.editValue(newValue: Int) {
-    when( (type as? PropertyType.TypedExpression)?.expectedType ) {
-        PropertyDataType.Percent -> editValueAsString("$newValue%")
-        PropertyDataType.FrameRate -> editValueAsString( "${newValue}fps")
+    when {
+        isPercentProp() -> editValueAsString("$newValue%")
+        isFrameRateProp() -> editValueAsString( "${newValue}fps")
+        isPointSizeProp() -> editValueAsString( "${newValue}pt")
         else -> editValueAsString( newValue.toString() )
     }
 }
@@ -361,11 +362,18 @@ fun WeaveElement.Prop<*>.editNumberValue(newValue: Float, maxDecimals: Int = 3, 
 }
 
 fun WeaveElement.Prop<*>.editValue(newValue: Float) {
-    when( (type as? PropertyType.TypedExpression)?.expectedType ) {
-        PropertyDataType.Percent -> editNumberValue(newValue*100f, 2, "%")
-        PropertyDataType.FrameRate -> editNumberValue(newValue, 0, "fps")
-        PropertyDataType.Integer -> editValueAsString( newValue.toLong().toString() )
+    when {
+        isPercentProp() -> editNumberValue(newValue*100f, 2, "%")
+        isFrameRateProp() -> editNumberValue(newValue, 0, "fps")
+        isPointSizeProp() -> editNumberValue(newValue, 1, "pt")
         else -> editNumberValue(newValue, 3)
+    }
+}
+
+fun WeaveElement.Prop<*>.editValue(newValue: Pair<Int,Int>) {
+    when {
+        isRatioProp() -> editValueAsString( "${newValue.first}:${newValue.second}")
+        else -> editValueAsString( newValue.toString() )
     }
 }
 
@@ -391,7 +399,9 @@ fun WeaveElement.Prop<*>.isTypedExpression(expectedType: PropertyDataType) = (ty
 
 fun WeaveElement.Prop<*>.isColorProp() = isTypedExpression(PropertyDataType.Color)
 fun WeaveElement.Prop<*>.isPercentProp() = isTypedExpression(PropertyDataType.Percent)
+fun WeaveElement.Prop<*>.isFrameRateProp() = isTypedExpression(PropertyDataType.FrameRate)
 fun WeaveElement.Prop<*>.isDimensionProp() = isTypedExpression(PropertyDataType.Dimension)
+fun WeaveElement.Prop<*>.isPointSizeProp() = isDimensionProp() && defaultValue is WeaveDimension.Points
 fun WeaveElement.Prop<*>.isRatioProp() = isTypedExpression(PropertyDataType.Ratio)
 fun WeaveElement.Prop<*>.isVec2Prop() = isTypedExpression(PropertyDataType.Vec2)
 fun WeaveElement.Prop<*>.isVec3Prop() = isTypedExpression(PropertyDataType.Vec3)
@@ -579,7 +589,7 @@ class PropertyManager : PropertyHolder {
     }
 
     private inner class PropImpl<T>(
-        val defaultValue: T,
+        override val defaultValue: T,
         override val key: String,
         override val displayName: String,
         override val type: PropertyType,
