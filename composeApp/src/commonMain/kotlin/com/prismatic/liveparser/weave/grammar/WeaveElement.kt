@@ -63,7 +63,7 @@ import kotlin.collections.plus
 import kotlin.enums.enumEntries
 import kotlin.reflect.KProperty
 
-fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseWeaveElement(liveParseConnection: WeaveLiveParseConnection): WeaveElement {
+fun LiveParseEntityScope<WeaveLineType, WeaveElement, WeaveParseError>.parseWeaveElement(liveParseConnection: WeaveLiveParseConnection): WeaveElement {
     val scope = WeaveEntityParseScope(this)
     val matches = ALL_ELEMENT_TYPES.filter { with(it){scope.recognize()} }
     val match = matches.singleOrNull() ?: return ErrorElement()
@@ -243,7 +243,7 @@ fun parsePropertyStringHandlingErrors(s: String, type: PropertyType) : ParsedPro
         .getOrNull() ?: PropertyExpression.of("null")
 }
 
-class WeaveEntityParseScope(private val baseScope: LiveParseEntityScope<WeaveLineType, WeaveElement>) : LiveParseEntityScope<WeaveLineType, WeaveElement> by baseScope {
+class WeaveEntityParseScope(private val baseScope: LiveParseEntityScope<WeaveLineType, WeaveElement, WeaveParseError>) : LiveParseEntityScope<WeaveLineType, WeaveElement, WeaveParseError> by baseScope {
     val firstLine = baseScope.entityLines.first().decomposeLine()
     private val terminalLines = baseScope.entityLines.asReversed().asSequence().map { it.decomposeLine() }.takeWhile { it.isBlankLine || it.isPropertyLine }.toList().reversed()
     val bodyLines = entityLines.subList(0, entityLines.size - terminalLines.size)

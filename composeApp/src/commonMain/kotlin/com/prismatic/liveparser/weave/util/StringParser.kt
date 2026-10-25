@@ -12,7 +12,8 @@ import com.prismatic.liveparser.weave.properties.isTargetNameStartChar
 abstract class StringParser(val string: String) {
     class ParseFailure : Throwable()
     var i = 0
-    val length = string.length
+    var length = string.length
+        private set
     inline fun peek(offset: Int = 0) : Char = if( i + offset < length ) string[i+offset] else '\u0000'
     var ch: Char = peek(0)
     var next : Char = peek(1)
@@ -21,8 +22,19 @@ abstract class StringParser(val string: String) {
         ch = next
         next = peek(1)
     }
+    fun removeComment() {
+        val commentIndex = string.indexOf("//")
+        if( commentIndex != -1 ) {
+            length = commentIndex
+        }
+    }
     fun skipWhitespace() {
         while( ch.isWhitespace() ) {advance()}
+    }
+    fun skipComment() {
+        if( ch == '/' && next == '/' ) {
+            i = length
+        }
     }
     var failed = false
     var failureOffset = -1

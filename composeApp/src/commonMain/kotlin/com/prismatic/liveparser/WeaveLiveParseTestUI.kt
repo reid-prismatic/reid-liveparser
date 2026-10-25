@@ -17,14 +17,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -84,7 +87,9 @@ fun WeaveLiveParseTestUI() {
 
     Column(Modifier.fillMaxSize()){
         Row(Modifier.fillMaxWidth().weight(1f)) {
-            Box(Modifier.weight(3f).fillMaxHeight()) {
+            Box(Modifier.weight(3f).fillMaxHeight()
+                .padding(top = 3.dp)
+            ) {
                 LazyColumn(Modifier.fillMaxSize().offset { IntOffset(0, -scrollDiff) }, state = listState) {
                     items(liveParse.lines, {it.entityId}) { line ->
                         LineDetail(line)
@@ -94,14 +99,14 @@ fun WeaveLiveParseTestUI() {
                     textFieldState,
                     Modifier
                         .fillMaxSize()
-                        .padding(top = 3.dp)
                         .drawLineNumbers(textLayoutResult, 30.dp, textFieldScrollState.value)
                         .drawErrors(liveParse.errors, textLayoutResult, 45.dp, textFieldScrollState.value)
                         .padding(start = 45.dp)
                         .verticalScroll(textFieldScrollState),
                     onTextLayout = {
                         textLayoutResult = it()
-                    }
+                    },
+                    textStyle = TextStyle(fontSize = 13.sp, lineHeight = 14.sp, color = Color(0f, 0f, 0f, 0.05f))
                 )
             }
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
@@ -277,12 +282,12 @@ private class SamplePropertyExpressionContext(
 }
 
 @Composable
-fun LineDetail(line: LiveParseLine<WeaveLineType>) {
+fun LineDetail(line: LiveParseLine<WeaveLineType, WeaveSyntaxHighlights>) {
     val recomposeCount = remember { intArrayOf(0) }
     SideEffect {
         recomposeCount[0]++
     }
-    Box(Modifier.fillMaxWidth().height(16.5.dp).padding(start=45.dp).background(when(line.lineType) {
+    Box(Modifier.fillMaxWidth().height(14.dp).padding(start=45.dp).background(when(line.lineType) {
         WeaveLineType.None -> Color(0.961f, 0.961f, 0.961f, 1.0f)
         WeaveLineType.Blank -> Color(0.878f, 0.878f, 0.878f, 1.0f)
         WeaveLineType.ConcreteEntityStart -> Color(0.6f, 0.8f, 1f)
@@ -299,11 +304,35 @@ fun LineDetail(line: LiveParseLine<WeaveLineType>) {
         WeaveLineType.ScriptEnd -> Color(0.31f, 0.655f, 0.533f, 1.0f)
         WeaveLineType.SyntaxError -> Color(0.89f, 0.353f, 0.353f, 1.0f)
         WeaveLineType.SegmentBreak -> Color(0.353f, 0.353f, 0.353f, 1.0f)
-    })) {
-        Text(line.line, Modifier.height(16.5.dp).align(Alignment.TopStart), color=Color.Blue, fontSize=13.sp)
+    }.let { it.copy(alpha = it.alpha * 0.3f) })) {
+        Text(
+            line.line.applyHighlights(line.syntaxHighlights),
+            Modifier.height(13.5.dp).align(Alignment.TopStart).padding(top = 0.dp),
+//            color = Color(0.2f, 0.2f, 1.0f, 0.3f),
+            style = TextStyle(fontSize = 13.sp, lineHeight = 14.sp)
+        )
         val eidStr = if(line.lineType.isEntityStart) "${line.entityId} / " else ""
         val contextStr = if(line.lineType == WeaveLineType.Blank) "" else "${line.lineType}"
-        Text("$contextStr $eidStr" + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color.Red, fontSize=13.sp, textAlign = TextAlign.End)
+        Text("$contextStr $eidStr" + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color.Red, fontSize=13.sp, lineHeight = 14.sp, textAlign = TextAlign.End)
+    }
+}
+
+private fun String.applyHighlights(syntaxHighlights: WeaveSyntaxHighlights?) : AnnotatedString {
+    return buildAnnotatedString {
+        append(this@applyHighlights)
+        syntaxHighlights?.highlights?.forEach {
+            val style: SpanStyle? = when(it.type) {
+                WeaveHighlight.Type.Comment -> SpanStyle(color = Color(0.396f, 0.537f, 0.482f, 1.0f))
+                WeaveHighlight.Type.PropertyValue -> SpanStyle(color = Color(0.192f, 0.302f, 0.498f, 1.0f))
+                WeaveHighlight.Type.PropertyName -> SpanStyle(color = Color(0.353f, 0.251f, 0.537f, 1.0f))
+                WeaveHighlight.Type.PropertyCondition -> SpanStyle(color = Color(0.463f, 0.235f, 0.451f, 1.0f))
+                WeaveHighlight.Type.Voiceover -> SpanStyle(color = Color(0.231f, 0.149f, 0.122f, 1.0f))
+                else -> null
+            }
+            if( style != null ) {
+                addStyle(style, it.range.first, it.range.last+1)
+            }
+        }
     }
 }
 
@@ -327,7 +356,7 @@ fun Modifier.drawLineNumbers(layoutResult: TextLayoutResult?, width: Dp, scrollO
 }
 
 @Composable
-fun Modifier.drawErrors(errors: List<LiveParseError>, layoutResult: TextLayoutResult?, leftOffset: Dp, scrollOffset: Int): Modifier {
+fun Modifier.drawErrors(errors: List<LiveParseError<WeaveParseError>>, layoutResult: TextLayoutResult?, leftOffset: Dp, scrollOffset: Int): Modifier {
     val measurer = rememberTextMeasurer()
     return this then Modifier.drawBehind {
         if(layoutResult == null || layoutResult.layoutInput.text.isEmpty()) return@drawBehind

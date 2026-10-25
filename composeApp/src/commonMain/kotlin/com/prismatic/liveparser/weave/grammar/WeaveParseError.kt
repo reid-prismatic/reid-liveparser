@@ -3,6 +3,7 @@ package com.prismatic.liveparser.weave.grammar
 import com.prismatic.liveparser.parser.LiveParseEntityScope
 
 sealed class WeaveParseError(val message: String) {
+    data object Unknown : WeaveParseError("Unknown Weave Parse Error")
     data object PropertyConditionNotInStyle : WeaveParseError("Property conditions not allowed except in style definitions")
     data class UnrecognizedProperty( val propertyName: String) : WeaveParseError("Property '$propertyName' is not valid for this kindo of element")
     data object MalformedProperty : WeaveParseError("Property line syntax in incorrect")
@@ -20,7 +21,7 @@ sealed class WeaveParseError(val message: String) {
     data object NotAssignment : WeaveParseError("Only assignment expressions are allowed")
 }
 
-fun LiveParseEntityScope<WeaveLineType, WeaveElement>.parseError(
+fun LiveParseEntityScope<WeaveLineType, WeaveElement, WeaveParseError>.parseError(
     error: WeaveParseError,
     errorLine: Int = -1,
     errorRange: IntRange = IntRange.EMPTY,

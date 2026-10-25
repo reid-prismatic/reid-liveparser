@@ -19,13 +19,15 @@ import kotlin.collections.forEachIndexed
 import kotlin.jvm.JvmInline
 
 @Composable
-public fun <LineType:LiveParseLineType, EntityData:Any> TextFieldState.rememberLiveParse(
+public fun <LineType:LiveParseLineType, EntityData:Any, SyntaxHighlightData:Any, ErrorData> TextFieldState.rememberLiveParse(
     initialLineType: LineType,
+    unknwonErrorData: ErrorData,
     computeContext: (line: String, prevLineType: LineType) -> LineType,
-    parseEntity: LiveParseEntityScope<LineType,EntityData>.()->EntityData
-) : LiveParse<LineType,EntityData> {
+    computeSyntaxHighlight: (line: String, lineType: LineType, entityData: EntityData) -> SyntaxHighlightData,
+    parseEntity: LiveParseEntityScope<LineType,EntityData,ErrorData>.()->EntityData
+) : LiveParse<LineType,EntityData,SyntaxHighlightData,ErrorData> {
     val coroutineScope = rememberCoroutineScope()
-    val liveParse = remember { LiveParseImpl(coroutineScope,this, initialLineType, computeContext, parseEntity) }
+    val liveParse = remember { LiveParseImpl(coroutineScope,this, initialLineType, computeContext, computeSyntaxHighlight, parseEntity) }
     return liveParse
 }
 
@@ -33,17 +35,18 @@ interface LiveParseLineType {
     val isEntityStart: Boolean
 }
 
-public interface LiveParse<LineType:LiveParseLineType, EntityData:Any> {
-    val lines: List<LiveParseLine<LineType>>
+public interface LiveParse<LineType:LiveParseLineType, EntityData:Any, SyntaxHighlightData:Any, ErrorData> {
+    val lines: List<LiveParseLine<LineType,SyntaxHighlightData>>
     val entities: List<LiveParseEntity<EntityData>>
 
-    val errors: List<LiveParseError>
+    val errors: List<LiveParseError<ErrorData>>
 }
 
-public interface LiveParseLine<LineType:LiveParseLineType> {
+public interface LiveParseLine<LineType:LiveParseLineType, SyntaxHighlightData:Any> {
     val line: String
     val lineType: LineType
     val entityId: EntityId
+    val syntaxHighlights: SyntaxHighlightData?
 }
 
 public interface LiveParseEntity<EntityData:Any> {
@@ -72,12 +75,13 @@ private data class LiveParseEntityImpl<EntityData:Any>(
     val lineRange: IntRange get() = startLine..endLine
 }
 
-private data class LiveParseLineImpl<LineType:LiveParseLineType>(
+private data class LiveParseLineImpl<LineType:LiveParseLineType,SyntaxHighlightData:Any>(
     override val line: String,
     override val lineType: LineType,
     val prevLineType: LineType,
-    override val entityId: EntityId
-) : LiveParseLine<LineType>
+    override val entityId: EntityId,
+    override val syntaxHighlights: SyntaxHighlightData?,
+) : LiveParseLine<LineType, SyntaxHighlightData>
 
 private inline infix fun <T:Comparable<T>> ClosedRange<T>.intersects(other: ClosedRange<T>) : Boolean =
     this.start <= other.endInclusive && this.endInclusive >= other.start
@@ -85,7 +89,7 @@ private inline infix fun <T:Comparable<T>> ClosedRange<T>.intersects(other: Clos
 private inline infix fun <T:Comparable<T>> ClosedRange<T>.notIntersects(other: ClosedRange<T>) : Boolean =
     !(this intersects other)
 
-interface LiveParseEntityScope<LineType:LiveParseLineType,EntityData:Any> {
+interface LiveParseEntityScope<LineType:LiveParseLineType,EntityData:Any, ErrorData> {
     val lineType: LineType
     val entityId: EntityId
     val existingEntityData: EntityData?
@@ -95,55 +99,59 @@ interface LiveParseEntityScope<LineType:LiveParseLineType,EntityData:Any> {
         errorLine: Int = -1, // Line number where the error occurred, relative to the start of the entity (zero is the first line), -1 if unknown
         errorColumn: Int = -1, // Column (character index within line) where the error occurred, -1 if unknown
         sourceLength: Int = -1, // Number of characters in the source text that the error applies to, -1 if unknown
-        errorData: Any? = null  // Extra data associated with the error, for uses like localization
+        errorData: ErrorData? = null  // Extra data associated with the error, for uses like localization
     )
 }
 
-fun LiveParseEntityScope<*,*>.parseError(
+fun <T> LiveParseEntityScope<*,*,T>.parseError(
     message: String,
     errorLine: Int,
     errorRange: IntRange,
-    errorData: Any? = null  // Extra data associated with the error, for uses like localization
+    errorData: T? = null  // Extra data associated with the error, for uses like localization
 ) = parseError(message, errorLine, errorRange.first, if(errorRange.isEmpty()) 0 else errorRange.last-errorRange.first+1, errorData)
 
 
 
-data class LiveParseError(
+data class LiveParseError<T>(
     val message: String,
     val errorLine: Int,
     val errorColumn: Int,
     val sourceLength: Int,
-    val errorData: Any?,
+    val errorData: T?,
     val entityId: EntityId
 )
 
-private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
+private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any, SyntaxHighlightData:Any, ErrorData>(
     coroutineScope: CoroutineScope,
     textFieldState: TextFieldState,
     val initialLineType: LineType,
     val computeContext: (String, LineType) -> LineType,
-    val parseEntity: LiveParseEntityScope<LineType,EntityData>.()->EntityData
-) : LiveParse<LineType,EntityData> {
+    val computeSyntaxHighlight: (String, LineType, EntityData) -> SyntaxHighlightData,
+    val parseEntity: LiveParseEntityScope<LineType, EntityData, ErrorData>.() -> EntityData
+) : LiveParse<LineType,EntityData,SyntaxHighlightData,ErrorData> {
     val lineChangesFlow = textFieldState.changedLinesInfoFlow()
 
-    private val _lines = mutableStateListOf<LiveParseLineImpl<LineType>>(LiveParseLineImpl(
-        line = "",
-        lineType = initialLineType,
-        prevLineType = initialLineType,
-        entityId = EntityId()
-    ))
-    override val lines: List<LiveParseLine<LineType>> get() = _lines
+    override val lines: List<LiveParseLine<LineType,SyntaxHighlightData>>
+        field = mutableStateListOf(
+            LiveParseLineImpl(
+                line = "",
+                lineType = initialLineType,
+                prevLineType = initialLineType,
+                entityId = EntityId(),
+                syntaxHighlights = null
+            )
+        )
 
-    private val _entities = mutableStateListOf<LiveParseEntityImpl<EntityData>>()
-    override val entities: List<LiveParseEntity<EntityData>> get() = _entities
-    override val errors: List<LiveParseError>
-        field = mutableStateListOf<LiveParseError>()
+    override val entities: List<LiveParseEntity<EntityData>>
+        field = mutableStateListOf<LiveParseEntityImpl<EntityData>>()
+    override val errors: List<LiveParseError<ErrorData>>
+        field = mutableStateListOf<LiveParseError<ErrorData>>()
 
     private fun validateEntities() {
         var prev = -1
         var prevId = EntityId.None
-        for( entity in _entities ) {
-            check(_entities.count { it.id == entity.id } == 1)
+        for( entity in entities) {
+            check(entities.count { it.id == entity.id } == 1)
             check(entity.startLine > prev) {"Entity ${entity.id} starts at ${entity.startLine} but prev ($prevId) ended at $prev"}
             prev = entity.endLine
             prevId = entity.id
@@ -154,7 +162,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
         coroutineScope.launch {
             lineChangesFlow.collect { rawChange ->
 
-                val change = if(rawChange.isNewlineInsertion() && rawChange.startLine > 0 && _lines[rawChange.startLine-1].line.isEmpty()) {
+                val change = if(rawChange.isNewlineInsertion() && rawChange.startLine > 0 && lines[rawChange.startLine-1].line.isEmpty()) {
                     object : ChangedLinesInfo {
                         override val prevLines: List<String> = listOf("")
                         override val newLines: List<String> = listOf("","")
@@ -167,36 +175,36 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
 
                 // Update any lines that were actually modified by this change, including
                 // updating their contexts.
-                var prevContext = if(change.startLine <= 0) initialLineType else _lines[change.startLine-1].lineType
+                var prevContext = if(change.startLine <= 0) initialLineType else lines[change.startLine-1].lineType
                 change.newLines.forEachIndexed { i, line ->
                     // TODO: Handle inserted blank lines better so new EID isn't allocated needlessly
                     val newContext = computeContext(line, prevContext)
-                    val entityId = if( i < change.prevLineCount && _lines[change.startLine+i].lineType == newContext ) {
-                        _lines[change.startLine+i].entityId
+                    val entityId = if( i < change.prevLineCount && lines[change.startLine+i].lineType == newContext ) {
+                        lines[change.startLine+i].entityId
                     } else {
                         EntityId()
                     }
-                    val newLine = LiveParseLineImpl(line,newContext,prevContext, entityId)
+                    val newLine = LiveParseLineImpl<LineType,SyntaxHighlightData>(line,newContext,prevContext, entityId, null)
                     prevContext = newContext
                     if( i < change.prevLineCount )
-                        _lines[change.startLine+i] = newLine
+                        lines[change.startLine+i] = newLine
                     else
-                        _lines.add(change.startLine+i, newLine)
+                        lines.add(change.startLine+i, newLine)
                 }
                 if( change.newLineCount < change.prevLineCount ) {
-                    _lines.removeRange(change.startLine+change.newLineCount, change.startLine+change.prevLineCount)
+                    lines.removeRange(change.startLine+change.newLineCount, change.startLine+change.prevLineCount)
                 }
 
                 // Update any following lines where their preceding context changed, because their interpretation may
                 // be affected by the change to preceding lines (Once the context matches up, we can stop).
                 var firstUnchangedLine = change.startLine + change.newLineCount
-                var precedingContext = if(firstUnchangedLine > 0) _lines[firstUnchangedLine-1].lineType else initialLineType
-                while( firstUnchangedLine < _lines.size && _lines[firstUnchangedLine].prevLineType != precedingContext ) {
-                    val newContext = computeContext(_lines[firstUnchangedLine].line,precedingContext)
-                    val entityId = if( _lines[firstUnchangedLine].lineType == newContext ) _lines[firstUnchangedLine].entityId else EntityId()
-                    _lines[firstUnchangedLine] = LiveParseLineImpl(_lines[firstUnchangedLine].line, newContext, precedingContext, entityId)
+                var precedingContext = if(firstUnchangedLine > 0) lines[firstUnchangedLine-1].lineType else initialLineType
+                while( firstUnchangedLine < lines.size && lines[firstUnchangedLine].prevLineType != precedingContext ) {
+                    val newContext = computeContext(lines[firstUnchangedLine].line,precedingContext)
+                    val entityId = if( lines[firstUnchangedLine].lineType == newContext ) lines[firstUnchangedLine].entityId else EntityId()
+                    lines[firstUnchangedLine] = LiveParseLineImpl(lines[firstUnchangedLine].line, newContext, precedingContext, entityId, null)
                     firstUnchangedLine++
-                    precedingContext = if(firstUnchangedLine > 0) _lines[firstUnchangedLine-1].lineType else initialLineType
+                    precedingContext = if(firstUnchangedLine > 0) lines[firstUnchangedLine-1].lineType else initialLineType
                 }
 
                 validateEntities()
@@ -209,11 +217,11 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                     else -> lineNumber
                 }
 
-                _entities.forEachIndexed { index, entity ->
+                entities.forEachIndexed { index, entity ->
                     val newStart = remapLineNumber(entity.startLine)
                     val newEnd = remapLineNumber(entity.endLine)
                     if( newStart != entity.startLine || newEnd != entity.endLine ) {
-                        _entities[index] = _entities[index].copy(startLine = newStart, endLine = newEnd)
+                        entities[index] = entities[index].copy(startLine = newStart, endLine = newEnd)
                     }
                 }
 
@@ -233,14 +241,14 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
 
                 var nextEntityIndex = 0
 
-                val entityParseScope = object : LiveParseEntityScope<LineType,EntityData> {
+                val entityParseScope = object : LiveParseEntityScope<LineType,EntityData,ErrorData> {
                     override val lineType: LineType get() = workingEntityLineType
                     override val entityId: EntityId get() = workingEntityId
                     override val existingEntityData: EntityData? get() = existingEntity
                     override val entityLines: List<String> = object : AbstractList<String>() {
                         override val size: Int
                             get() = workingEntityEndLine - workingEntityStartLine + 1
-                        override fun get(index: Int): String = _lines[workingEntityStartLine+index].line
+                        override fun get(index: Int): String = lines[workingEntityStartLine+index].line
                     }
 
                     override fun parseError(
@@ -248,7 +256,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                         errorLine: Int,
                         errorColumn: Int,
                         sourceLength: Int,
-                        errorData: Any?
+                        errorData: ErrorData?
                     ) {
                         errors.add( LiveParseError(
                             message = message,
@@ -276,8 +284,8 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                     if( workingEntityStartLine < 0 ) return                     // Didn't find start of entity yet
                     if( workingEntityEndLine < workingEntityStartLine ) return  // Entity body would have zero length
                     val workingEntityLineRange = workingEntityStartLine..workingEntityEndLine
-                    if( nextEntityIndex < _entities.size ) {
-                        val nextEntity = _entities[nextEntityIndex]
+                    if( nextEntityIndex < entities.size ) {
+                        val nextEntity = entities[nextEntityIndex]
                         if( nextEntity.id == workingEntityId ) {
                             if (nextEntity.lineRange == workingEntityLineRange && nextEntity.lineRange notIntersects affectedLineRange) {
                                 nextEntityIndex++
@@ -286,22 +294,22 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                                 clearParseErrors()
                                 val newEntity = entityParseScope.parseEntity()
                                 existingEntity = null
-                                _entities[nextEntityIndex] = LiveParseEntityImpl(
+                                entities[nextEntityIndex] = LiveParseEntityImpl(
                                     newEntity,
                                     workingEntityId,
                                     workingEntityStartLine,
                                     workingEntityEndLine
                                 )
                                 nextEntityIndex++
-                                while(nextEntityIndex < _entities.size && _entities[nextEntityIndex].startLine <= workingEntityEndLine ) {
-                                    _entities.removeAt(nextEntityIndex)
+                                while(nextEntityIndex < entities.size && entities[nextEntityIndex].startLine <= workingEntityEndLine ) {
+                                    entities.removeAt(nextEntityIndex)
                                 }
                             }
                         } else if(nextEntity.startLine > workingEntityEndLine) {
                             existingEntity = null
                             clearParseErrors()
                             val newEntity = entityParseScope.parseEntity()
-                            _entities.add(nextEntityIndex, LiveParseEntityImpl(
+                            entities.add(nextEntityIndex, LiveParseEntityImpl(
                                 newEntity,
                                 workingEntityId,
                                 workingEntityStartLine,
@@ -312,7 +320,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                             existingEntity = null
                             clearParseErrors()
                             val newEntity = entityParseScope.parseEntity()
-                            _entities[nextEntityIndex] = LiveParseEntityImpl(
+                            entities[nextEntityIndex] = LiveParseEntityImpl(
                                 newEntity,
                                 workingEntityId,
                                 workingEntityStartLine,
@@ -324,7 +332,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                         existingEntity = null
                         clearParseErrors()
                         val newEntity = entityParseScope.parseEntity()
-                        _entities.add(nextEntityIndex, LiveParseEntityImpl(
+                        entities.add(nextEntityIndex, LiveParseEntityImpl(
                             newEntity,
                             workingEntityId,
                             workingEntityStartLine,
@@ -334,7 +342,7 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                     }
                 }
 
-                _lines.forEachIndexed { index, line ->
+                lines.forEachIndexed { index, line ->
                     if(line.lineType.isEntityStart) {
                         workingEntityEndLine = index-1
                         processEntity()
@@ -344,13 +352,30 @@ private class LiveParseImpl<LineType:LiveParseLineType, EntityData:Any>(
                         workingEntityEndLine = -1
                     }
                 }
-                workingEntityEndLine = _lines.size-1
+                workingEntityEndLine = lines.size-1
                 processEntity()
-                while( nextEntityIndex < _entities.size )
-                    _entities.removeAt(nextEntityIndex)
+                while( nextEntityIndex < entities.size )
+                    entities.removeAt(nextEntityIndex)
                 validateEntities()
 
-                errors.removeAll { err -> _entities.none { it.id == err.entityId } }
+                errors.removeAll { err -> entities.none { it.id == err.entityId } }
+
+                // TODO: If syntax highlighting affects performance too much, run this code in a separate coroutine, and restart if the range changes
+                var syntaxHighlightStartLine = affectedLineRange.first
+                while( syntaxHighlightStartLine > 0 && !lines[syntaxHighlightStartLine].lineType.isEntityStart )
+                    syntaxHighlightStartLine--
+                var lineEntity = EntityId.None
+                for( lineIndex in syntaxHighlightStartLine .. affectedLineRange.last ) {
+                    val line = lines[lineIndex]
+                    if( line.lineType.isEntityStart) {
+                        lineEntity = line.entityId
+                    }
+                    val entity = entities.firstOrNull { it.id == lineEntity }
+                    println("SH: $lineIndex e:${entity?.id} l.eid=${line.entityId} eids=${entities.joinToString(",") { it.id.toString() }}")
+                    if( entity != null ) {
+                        lines[lineIndex] = line.copy(syntaxHighlights = computeSyntaxHighlight(line.line, line.lineType, entity.entityData))
+                    }
+                }
 
             }
         }

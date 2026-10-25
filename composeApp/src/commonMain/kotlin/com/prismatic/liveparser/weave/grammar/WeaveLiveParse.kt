@@ -11,7 +11,7 @@ import com.prismatic.liveparser.parser.rememberLiveParse
 import com.prismatic.liveparser.weave.elements.ScriptingBlockElement
 import com.prismatic.liveparser.weave.elements.StyleElement
 
-interface WeaveLiveParse : LiveParse<WeaveLineType, WeaveElement> {
+interface WeaveLiveParse : LiveParse<WeaveLineType, WeaveElement, WeaveSyntaxHighlights, WeaveParseError> {
     val styleElements: Map<String, List<StyleElement>>
     val variableElements: List<ScriptingBlockElement>
 }
@@ -25,8 +25,12 @@ public fun TextFieldState.rememberWeaveLiveParse(): WeaveLiveParse {
     val connection = remember { WeaveLiveParseConnection(this) }
     val liveParse = rememberLiveParse(
         initialLineType = WeaveLineType.None,
+        unknwonErrorData = WeaveParseError.Unknown as WeaveParseError,
         computeContext = { line, prevLineType ->
             getWeaveLineType(line, prevLineType)
+        },
+        computeSyntaxHighlight = { line, lineType, entityData ->
+            computeWeaveSyntaxHighlights(line, lineType, entityData)
         },
         parseEntity = {
             parseWeaveElement(connection)
@@ -39,7 +43,7 @@ public fun TextFieldState.rememberWeaveLiveParse(): WeaveLiveParse {
     return weaveLiveParse
 }
 
-private class WeaveLiveParseImpl(private val baseLaveParse : LiveParse<WeaveLineType, WeaveElement>) : WeaveLiveParse, LiveParse<WeaveLineType, WeaveElement> by baseLaveParse {
+private class WeaveLiveParseImpl(private val baseLaveParse : LiveParse<WeaveLineType, WeaveElement, WeaveSyntaxHighlights, WeaveParseError>) : WeaveLiveParse, LiveParse<WeaveLineType, WeaveElement, WeaveSyntaxHighlights, WeaveParseError> by baseLaveParse {
     override val styleElements: Map<String, List<StyleElement>> by derivedStateOf {baseLaveParse.entities.map { it.entityData }.filterIsInstance<StyleElement>().groupBy { it.styleName }}
     override val variableElements: List<ScriptingBlockElement> by derivedStateOf {baseLaveParse.entities.map { it.entityData }.filterIsInstance<ScriptingBlockElement>().filter { it.variables.isNotEmpty() }}
 }

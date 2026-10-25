@@ -69,6 +69,7 @@ private class PropertyLineParser(line: String) : StringParser(line) {
     var propertyValue: ParsedStringFragment = ParsedStringFragment.Empty
 
     fun parse() {
+        removeComment()
         skipWhitespace()
         expect('-')
         skipWhitespace()
