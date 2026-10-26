@@ -106,7 +106,7 @@ fun WeaveLiveParseTestUI() {
                     onTextLayout = {
                         textLayoutResult = it()
                     },
-                    textStyle = TextStyle(fontSize = 13.sp, lineHeight = 14.sp, color = Color(0f, 0f, 0f, 0.05f))
+                    textStyle = TextStyle(fontSize = 13.sp, lineHeight = 14.sp, color = Color.Transparent)
                 )
             }
             LazyColumn(Modifier.weight(1f).fillMaxHeight()) {
@@ -304,16 +304,21 @@ fun LineDetail(line: LiveParseLine<WeaveLineType, WeaveSyntaxHighlights>) {
         WeaveLineType.ScriptEnd -> Color(0.31f, 0.655f, 0.533f, 1.0f)
         WeaveLineType.SyntaxError -> Color(0.89f, 0.353f, 0.353f, 1.0f)
         WeaveLineType.SegmentBreak -> Color(0.353f, 0.353f, 0.353f, 1.0f)
-    }.let { it.copy(alpha = it.alpha * 0.3f) })) {
+    }.let { it.copy(alpha = it.alpha * 0.17f) })) {
         Text(
             line.line.applyHighlights(line.syntaxHighlights),
             Modifier.height(13.5.dp).align(Alignment.TopStart).padding(top = 0.dp),
 //            color = Color(0.2f, 0.2f, 1.0f, 0.3f),
             style = TextStyle(fontSize = 13.sp, lineHeight = 14.sp)
         )
-        val eidStr = if(line.lineType.isEntityStart) "${line.entityId} / " else ""
+        val eidStr = if(line.lineType.isEntityStart) "${line.entityId}" else ""
         val contextStr = if(line.lineType == WeaveLineType.Blank) "" else "${line.lineType}"
-        Text("$contextStr $eidStr" + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color.Red, fontSize=13.sp, lineHeight = 14.sp, textAlign = TextAlign.End)
+        Text("$contextStr$eidStr " + recomposeCount[0], Modifier.height(16.5.dp).padding(end=25.dp).align(Alignment.TopStart).fillMaxWidth(), color=Color(
+            0.678f,
+            0.153f,
+            0.153f,
+            0.784f
+        ), textAlign = TextAlign.End, style = TextStyle(fontSize=13.sp, lineHeight = 14.sp))
     }
 }
 
@@ -323,10 +328,23 @@ private fun String.applyHighlights(syntaxHighlights: WeaveSyntaxHighlights?) : A
         syntaxHighlights?.highlights?.forEach {
             val style: SpanStyle? = when(it.type) {
                 WeaveHighlight.Type.Comment -> SpanStyle(color = Color(0.396f, 0.537f, 0.482f, 1.0f))
-                WeaveHighlight.Type.PropertyValue -> SpanStyle(color = Color(0.192f, 0.302f, 0.498f, 1.0f))
-                WeaveHighlight.Type.PropertyName -> SpanStyle(color = Color(0.353f, 0.251f, 0.537f, 1.0f))
+                WeaveHighlight.Type.PropertyValue -> SpanStyle(color = Color(0.204f, 0.341f, 0.584f, 1.0f))
+                WeaveHighlight.Type.PropertyName -> SpanStyle(color = Color(0.404f, 0.263f, 0.659f, 1.0f))
                 WeaveHighlight.Type.PropertyCondition -> SpanStyle(color = Color(0.463f, 0.235f, 0.451f, 1.0f))
-                WeaveHighlight.Type.Voiceover -> SpanStyle(color = Color(0.231f, 0.149f, 0.122f, 1.0f))
+                WeaveHighlight.Type.Voiceover -> SpanStyle(color = Color(0.322f, 0.2f, 0.161f, 1.0f))
+                WeaveHighlight.Type.Operator -> SpanStyle(color = Color(0.729f, 0.243f, 0.161f, 1.0f))
+                WeaveHighlight.Type.SemanticTag -> SpanStyle(color = Color(0.267f, 0.576f, 0.306f, 1.0f))
+                WeaveHighlight.Type.ColorLiteral -> SpanStyle(color = Color(0.149f, 0.153f, 0.165f, 1.0f))
+                WeaveHighlight.Type.ColorLiteralOperator -> SpanStyle(color = Color(0.204f, 0.212f, 0.224f, 1.0f))
+                WeaveHighlight.Type.ColorLiteralRed -> SpanStyle(color = Color(0.655f, 0.157f, 0.157f, 1.0f))
+                WeaveHighlight.Type.ColorLiteralGreen -> SpanStyle(color = Color(0.227f, 0.498f, 0.149f, 1.0f))
+                WeaveHighlight.Type.ColorLiteralBlue -> SpanStyle(color = Color(0.145f, 0.275f, 0.537f, 1.0f))
+                WeaveHighlight.Type.ColorLiteralAlpha -> SpanStyle(color = Color(0.427f, 0.427f, 0.427f, 1.0f))
+                WeaveHighlight.Type.ConcreteEntityNamespace -> SpanStyle(color = Color(0.129f, 0.22f, 0.659f, 1.0f))
+                WeaveHighlight.Type.Literal -> SpanStyle(color = Color(0.251f, 0.463f, 0.525f, 1.0f))
+                WeaveHighlight.Type.Symbol -> SpanStyle(color = Color(0.153f, 0.153f, 0.165f, 1.0f))
+                WeaveHighlight.Type.Break -> SpanStyle(color = Color(0.298f, 0.129f, 0.282f, 1.0f))
+                WeaveHighlight.Type.BreakArguments -> SpanStyle(color = Color(0.455f, 0.173f, 0.431f, 1.0f))
                 else -> null
             }
             if( style != null ) {

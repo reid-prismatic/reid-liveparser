@@ -15,6 +15,13 @@ import androidx.compose.ui.text.font.FontWeight
 import com.prismatic.liveparser.WeaveDimension
 import com.prismatic.liveparser.toStringAsFixed
 import com.prismatic.liveparser.weave.types.WeavePercent
+import intrangeset.IntRangeSet
+import intrangeset.addAll
+import intrangeset.emptyIntRangeSet
+import intrangeset.intRangeSetOf
+import intrangeset.minus
+import intrangeset.mutableIntRangeSetOf
+import intrangeset.plus
 import org.prismatic.opus.math.Vec2
 import org.prismatic.opus.math.Vec3
 import org.prismatic.opus.math.Vec4
@@ -406,6 +413,138 @@ val PropertyExpression.isLiteralSubexpression : Boolean get() = when {
     this is PropertyExpression.Animation && this.start.isLiteralSubexpression && this.segments.all { it.isLiteralSubexpression } -> true
     else -> false
 }
+
+fun ParsedProperty.walk(block: (ParsedProperty)->Unit ) {
+    block(this)
+    when(this) {
+        is ParsedProperty.Alternate -> this.value?.walk(block)
+        is ParsedProperty.Compound -> this.components.forEach { it?.walk(block) }
+        is ParsedProperty.Error -> {}
+        is PropertyExpression.Animation -> {
+            this.start.value.walk(block)
+            this.start.time?.walk(block)
+            this.segments.forEach { segment ->
+                segment.end.value.walk(block)
+                segment.end.time?.walk(block)
+                segment.easing?.let { easing -> when(easing) {
+                    is PropertyExpression.Easing.CubicBezier -> {
+                        easing.x1.walk(block)
+                        easing.y1.walk(block)
+                        easing.x2.walk(block)
+                        easing.y2.walk(block)
+                    }
+                    is PropertyExpression.Easing.FunctionCall -> {
+                        easing.arguments.forEach { it.walk(block) }
+                    }
+                    is PropertyExpression.Easing.Lambda -> {
+                        easing.body.walk(block)
+                    }
+                    is PropertyExpression.Easing.Named -> {}
+                } }
+            }
+        }
+        is PropertyExpression.Binary -> {
+            this.left.walk(block)
+            this.right.walk(block)
+        }
+        is PropertyExpression.FunctionCall -> {
+            this.arguments.forEach { it.walk(block) }
+        }
+        is PropertyExpression.BooleanLiteral,
+        is PropertyExpression.ColorLiteral,
+        is PropertyExpression.DimensionLiteral,
+        is PropertyExpression.FrameRateLiteral,
+        is PropertyExpression.IntegerLiteral,
+        is PropertyExpression.NumberLiteral,
+        is PropertyExpression.PercentageLiteral,
+        is PropertyExpression.RatioLiteral,
+        is PropertyExpression.StringLiteral,
+        is PropertyExpression.TimeLiteral -> {}
+        is PropertyExpression.SemanticTag -> {}
+        is PropertyExpression.Unary -> this.operand.walk(block)
+        is PropertyExpression.Variable -> {}
+        is PropertyExpression.Vector -> this.components.forEach { it.walk(block) }
+    }
+}
+
+fun ParsedProperty.walkSpans(block: (prop: ParsedProperty, spans: IntRangeSet, childSpans: IntRangeSet)->Unit) {
+    val calls = mutableListOf<()->Unit>()
+    walkSpansInternal { prop, spans, childSpans ->
+        calls += {block(prop, spans, childSpans)}
+    }
+    calls.asReversed().forEach { it() }
+}
+
+fun ParsedProperty.walkSpansInternal(block: (prop: ParsedProperty, spans: IntRangeSet, childSpans: IntRangeSet)->Unit ) : IntRangeSet {
+    val childSpans : IntRangeSet = when(this) {
+        is ParsedProperty.Alternate -> this.value?.walkSpansInternal(block) ?: emptyIntRangeSet()
+        is ParsedProperty.Compound -> {
+            val spans = mutableIntRangeSetOf()
+            this.components.forEach { component ->
+                component?.walkSpansInternal(block)?.let { spans.addAll(it) }
+            }
+            spans
+        }
+        is ParsedProperty.Error -> emptyIntRangeSet()
+        is PropertyExpression.Animation -> {
+            val spans = mutableIntRangeSetOf()
+            spans.addAll(this.start.value.walkSpansInternal(block))
+            this.start.time?.walkSpansInternal(block)?.let { spans.addAll(it) }
+            this.segments.forEach { segment ->
+                spans.addAll(segment.end.value.walkSpansInternal(block))
+                segment.end.time?.walkSpansInternal(block)?.let { spans.addAll(it) }
+                segment.easing?.let { easing -> when(easing) {
+                    is PropertyExpression.Easing.CubicBezier -> {
+                        spans.addAll(easing.x1.walkSpansInternal(block))
+                        spans.addAll(easing.y1.walkSpansInternal(block))
+                        spans.addAll(easing.x2.walkSpansInternal(block))
+                        spans.addAll(easing.y2.walkSpansInternal(block))
+                    }
+                    is PropertyExpression.Easing.FunctionCall -> {
+                        easing.arguments.forEach {
+                            spans.addAll(it.walkSpansInternal(block))
+                        }
+                    }
+                    is PropertyExpression.Easing.Lambda -> {
+                        spans.addAll(easing.body.walkSpansInternal(block))
+                    }
+                    is PropertyExpression.Easing.Named -> {}
+                } }
+            }
+            spans
+        }
+        is PropertyExpression.Binary -> {
+            this.left.walkSpansInternal(block) + this.right.walkSpansInternal(block)
+        }
+        is PropertyExpression.FunctionCall -> {
+            val spans = mutableIntRangeSetOf()
+            this.arguments.forEach { spans.addAll(it.walkSpansInternal(block)) }
+            spans
+        }
+        is PropertyExpression.BooleanLiteral,
+        is PropertyExpression.ColorLiteral,
+        is PropertyExpression.DimensionLiteral,
+        is PropertyExpression.FrameRateLiteral,
+        is PropertyExpression.IntegerLiteral,
+        is PropertyExpression.NumberLiteral,
+        is PropertyExpression.PercentageLiteral,
+        is PropertyExpression.RatioLiteral,
+        is PropertyExpression.StringLiteral,
+        is PropertyExpression.TimeLiteral -> emptyIntRangeSet()
+        is PropertyExpression.SemanticTag -> emptyIntRangeSet()
+        is PropertyExpression.Unary -> this.operand.walkSpansInternal(block)
+        is PropertyExpression.Variable -> emptyIntRangeSet()
+        is PropertyExpression.Vector -> {
+            val spans = mutableIntRangeSetOf()
+            this.components.forEach { spans.addAll(it.walkSpansInternal(block)) }
+            spans
+        }
+    }
+    val thisSpan = intRangeSetOf((this as? PropertyExpression)?.sourceRange ?: IntRange.EMPTY)
+    block(this, thisSpan - childSpans, childSpans)
+    return thisSpan
+}
+
 
 /**
  * The tokenizer and recursive-descent parser behind [parsePropertyExpression]. It reads the characters of [input]
