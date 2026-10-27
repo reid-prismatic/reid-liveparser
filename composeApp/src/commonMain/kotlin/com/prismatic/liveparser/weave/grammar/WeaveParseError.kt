@@ -13,6 +13,7 @@ sealed class WeaveParseError(val message: String) {
     data object MismatchedBracket : WeaveParseError("Mismatched brackets")
     data object UnterminatedQuote : WeaveParseError("Unterminated quote")
     data object ExpectedPropertyName : WeaveParseError("Expected property name")
+    data object ExpectedPropertyValue : WeaveParseError("Property value is missing")
     data object ExpectedStyleName : WeaveParseError("Expected style reference")
     data class InvalidPropertyValue(val reason: String) : WeaveParseError(reason)
     data class InvalidPropertyCondition(val reason: String) : WeaveParseError(reason)

@@ -100,6 +100,9 @@ private class PropertyLineParser(line: String) : StringParser(line) {
         }
         expect(':')
         skipWhitespace()
+        if( atEnd ) {
+            error(WeaveParseError.ExpectedPropertyValue)
+        }
         propertyValue = extractRemaining()
     }
 
